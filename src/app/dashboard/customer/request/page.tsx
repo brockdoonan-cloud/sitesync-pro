@@ -4,14 +4,14 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 const SERVICE_TYPES = [
-  { value: 'swap', label: 'Swap Out', desc: 'Exchange full container for empty', icon: '🔄' },
-  { value: 'removal', label: 'Pickup / Removal', desc: 'Remove equipment from jobsite', icon: '🚛' },
-  { value: 'delivery', label: 'New Delivery', desc: 'Bring new equipment to site', icon: '📦' },
-  { value: 'pump_out', label: 'Pump Out', desc: 'Water removal service', icon: '💧' },
-  { value: 'emergency', label: 'Emergency', desc: 'Urgent service needed ASAP', icon: '🚨' },
+  { value: 'swap', label: 'Swap Out', desc: 'Exchange full container for empty', icon: '' },
+  { value: 'removal', label: 'Pickup / Removal', desc: 'Remove equipment from jobsite', icon: '' },
+  { value: 'delivery', label: 'New Delivery', desc: 'Bring new equipment to site', icon: '' },
+  { value: 'pump_out', label: 'Pump Out', desc: 'Water removal service', icon: '' },
+  { value: 'emergency', label: 'Emergency', desc: 'Urgent service needed ASAP', icon: '' },
 ]
 
-const TIME_PREFS = ['Morning (7am–11am)', 'Midday (11am–2pm)', 'Afternoon (2pm–5pm)', 'Any time']
+const TIME_PREFS = ['Morning (7am11am)', 'Midday (11am2pm)', 'Afternoon (2pm5pm)', 'Any time']
 
 export default function RequestServicePage() {
   const [form, setForm] = useState({ service_type: '', jobsite_address: '', preferred_date: '', time_preference: '', notes: '', bin_number: '' })
