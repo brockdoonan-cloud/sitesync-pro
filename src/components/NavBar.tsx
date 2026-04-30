@@ -20,6 +20,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   const opLinks = [
     { href: '/dashboard/operator', label: 'Overview' },
     { href: '/dashboard/operator/onboarding', label: 'Setup' },
+    { href: '/dashboard/operator/import', label: 'Import' },
     { href: '/dashboard/operator/leads', label: 'Leads' },
     { href: '/dashboard/operator/requests', label: 'Requests' },
     { href: '/dashboard/operator/jobs', label: 'Jobs' },
