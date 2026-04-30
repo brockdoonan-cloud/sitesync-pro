@@ -83,6 +83,15 @@ alter table public.invoices
   add column if not exists status text default 'open',
   add column if not exists created_at timestamptz default now();
 
+-- 2b) Guardrails for repeat imports.
+create unique index if not exists clients_company_name_normalized_key
+  on public.clients (lower(trim(company_name)))
+  where company_name is not null;
+
+create unique index if not exists jobsites_client_name_address_key
+  on public.jobsites (client_id, lower(trim(name)), lower(trim(address)))
+  where name is not null and address is not null;
+
 -- 3) Allow authenticated operator workflows to load operational data.
 alter table public.clients enable row level security;
 alter table public.jobsites enable row level security;

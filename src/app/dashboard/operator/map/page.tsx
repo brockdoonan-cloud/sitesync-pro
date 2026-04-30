@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type Jobsite = {
@@ -68,7 +68,7 @@ const DEMO_SITES: MapSite[] = [
 ]
 
 function needsSwap(item: Equipment) {
-  return ['needs_swap', 'full', 'overflowing', 'swap_needed'].includes((item.status || '').toLowerCase())
+  return ['needs_swap', 'full', 'overflowing', 'swap_needed', 'maintenance', 'needs_service'].includes((item.status || '').toLowerCase())
 }
 
 function siteSwapCount(site: MapSite) {
@@ -101,6 +101,147 @@ function coordToPoint(site: Jobsite, index: number, total: number) {
     x: 50 + Math.cos(angle) * 30,
     y: 50 + Math.sin(angle) * 24,
   }
+}
+
+type GoogleLatLng = { lat: number; lng: number }
+type GoogleMapsWindow = Window & {
+  google?: {
+    maps: {
+      Map: new (element: HTMLElement, options: object) => {
+        setCenter: (latLng: GoogleLatLng) => void
+        fitBounds: (bounds: unknown) => void
+      }
+      Marker: new (options: object) => { addListener: (eventName: string, cb: () => void) => void }
+      InfoWindow: new (options: object) => { open: (map: unknown, marker: unknown) => void }
+      LatLngBounds: new () => { extend: (latLng: GoogleLatLng) => void }
+      Point: new (x: number, y: number) => unknown
+      Geocoder: new () => { geocode: (request: { address: string }) => Promise<{ results: { geometry: { location: { lat: () => number; lng: () => number } } }[] }> }
+    }
+  }
+  initSiteSyncGoogleMap?: () => void
+}
+
+let googleMapsLoading = false
+let googleMapsLoaded = false
+const googleCallbacks: (() => void)[] = []
+
+function loadGoogleMaps(apiKey: string, cb: () => void) {
+  const mapsWindow = window as GoogleMapsWindow
+  if (googleMapsLoaded || mapsWindow.google?.maps) {
+    cb()
+    return
+  }
+  googleCallbacks.push(cb)
+  if (googleMapsLoading) return
+  googleMapsLoading = true
+  mapsWindow.initSiteSyncGoogleMap = () => {
+    googleMapsLoaded = true
+    googleCallbacks.splice(0).forEach(fn => fn())
+  }
+  const script = document.createElement('script')
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initSiteSyncGoogleMap&loading=async`
+  script.async = true
+  script.defer = true
+  script.onerror = () => googleCallbacks.splice(0).forEach(fn => fn())
+  document.head.appendChild(script)
+}
+
+function GoogleEquipmentMap({
+  sites,
+  selected,
+  onSelect,
+}: {
+  sites: MapSite[]
+  selected?: MapSite
+  onSelect: (id: string) => void
+}) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const [ready, setReady] = useState(false)
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || ''
+
+  useEffect(() => {
+    if (!apiKey) return
+    loadGoogleMaps(apiKey, () => setReady(Boolean((window as GoogleMapsWindow).google?.maps)))
+  }, [apiKey])
+
+  useEffect(() => {
+    const mapsWindow = window as GoogleMapsWindow
+    if (!ready || !mapRef.current || !mapsWindow.google?.maps) return
+
+    let cancelled = false
+    const google = mapsWindow.google
+    const map = new google.maps.Map(mapRef.current, {
+      center: { lat: 28.5384, lng: -81.3789 },
+      zoom: 9,
+      mapTypeControl: false,
+      fullscreenControl: true,
+      streetViewControl: false,
+    })
+    const bounds = new google.maps.LatLngBounds()
+    const geocoder = new google.maps.Geocoder()
+
+    async function positionFor(site: MapSite): Promise<GoogleLatLng | null> {
+      if (typeof site.lat === 'number' && typeof site.lng === 'number') return { lat: site.lat, lng: site.lng }
+      if (!site.address) return null
+      try {
+        const result = await geocoder.geocode({ address: site.address })
+        const location = result.results[0]?.geometry.location
+        return location ? { lat: location.lat(), lng: location.lng() } : null
+      } catch {
+        return null
+      }
+    }
+
+    async function drawMarkers() {
+      for (const site of sites) {
+        const position = await positionFor(site)
+        if (cancelled || !position) continue
+        const swapCount = siteSwapCount(site)
+        const marker = new google.maps.Marker({
+          map,
+          position,
+          title: site.address || 'Jobsite',
+          label: { text: String(site.equipment.length), color: '#ffffff', fontWeight: '700' },
+          icon: {
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+            fillColor: swapCount > 0 ? '#ef4444' : '#22c55e',
+            fillOpacity: 1,
+            strokeColor: '#0f172a',
+            strokeWeight: 2,
+            scale: selected?.id === site.id ? 1.8 : 1.5,
+            anchor: new google.maps.Point(12, 24),
+          },
+        })
+        const info = new google.maps.InfoWindow({
+          content: `<div style="font-family:system-ui;min-width:180px"><strong>${site.address || 'Jobsite'}</strong><br/>Equipment: ${site.equipment.length}<br/>Needs service: ${swapCount}</div>`,
+        })
+        marker.addListener('click', () => {
+          onSelect(site.id)
+          info.open(map, marker)
+        })
+        bounds.extend(position)
+      }
+      if (!cancelled && sites.length > 0) map.fitBounds(bounds)
+    }
+
+    drawMarkers()
+    return () => {
+      cancelled = true
+    }
+  }, [onSelect, ready, selected?.id, sites])
+
+  if (!apiKey) return null
+
+  return (
+    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+      <div ref={mapRef} className="absolute inset-0" />
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 text-sm">
+          Loading Google Maps...
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function MapPage() {
@@ -146,6 +287,7 @@ export default function MapPage() {
   const selected = sites.find(site => site.id === selectedId) || filteredSites[0] || sites[0]
   const allEquipment = sites.flatMap(site => site.equipment)
   const swapNeeded = allEquipment.filter(needsSwap)
+  const hasGoogleMapKey = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY)
 
   return (
     <div className="space-y-6">
@@ -189,33 +331,38 @@ export default function MapPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
-          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/80 to-transparent" />
-          <div className="absolute left-4 top-4 z-10">
-            <div className="text-xs uppercase tracking-wide text-slate-500">Orlando service area</div>
-            <div className="text-lg font-semibold text-white">Live Equipment Map</div>
+        {hasGoogleMapKey ? (
+          <GoogleEquipmentMap sites={filteredSites} selected={selected} onSelect={setSelectedId} />
+        ) : (
+          <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/80 to-transparent" />
+            <div className="absolute left-4 top-4 z-10">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Orlando service area</div>
+              <div className="text-lg font-semibold text-white">Live Equipment Map</div>
+              <div className="text-xs text-slate-500 mt-1">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for Google Maps.</div>
+            </div>
+            {filteredSites.map(site => {
+              const count = siteSwapCount(site)
+              const selectedPin = selected?.id === site.id
+              return (
+                <button
+                  key={site.id}
+                  onClick={() => setSelectedId(site.id)}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full border-2 shadow-lg transition-all ${selectedPin ? 'h-12 w-12 border-white scale-110' : 'h-9 w-9 border-slate-950'} ${count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ left: `${site.x}%`, top: `${site.y}%` }}
+                  title={site.address || 'Jobsite'}
+                >
+                  <span className="text-xs font-bold text-white">{site.equipment.length}</span>
+                </button>
+              )
+            })}
+            <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Green pins: equipment okay</div>
+              <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Red pins: one or more swaps needed</div>
+            </div>
           </div>
-          {filteredSites.map(site => {
-            const count = siteSwapCount(site)
-            const selectedPin = selected?.id === site.id
-            return (
-              <button
-                key={site.id}
-                onClick={() => setSelectedId(site.id)}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full border-2 shadow-lg transition-all ${selectedPin ? 'h-12 w-12 border-white scale-110' : 'h-9 w-9 border-slate-950'} ${count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
-                style={{ left: `${site.x}%`, top: `${site.y}%` }}
-                title={site.address || 'Jobsite'}
-              >
-                <span className="text-xs font-bold text-white">{site.equipment.length}</span>
-              </button>
-            )
-          })}
-          <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Green pins: equipment okay</div>
-            <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Red pins: one or more swaps needed</div>
-          </div>
-        </div>
+        )}
 
         <div className="space-y-4">
           <div className="card">

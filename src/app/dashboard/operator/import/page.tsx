@@ -17,6 +17,17 @@ type ImportRow = {
   comments: string
 }
 
+type ImportStats = {
+  clientsCreated: number
+  clientsReused: number
+  jobsitesCreated: number
+  jobsitesReused: number
+  equipmentCreated: number
+  equipmentUpdated: number
+  servicesCreated: number
+  servicesSkipped: number
+}
+
 const FLORIDA_DEMO_ADDRESSES = [
   '255 S Orange Ave, Orlando, FL 32801',
   '400 W Church St, Orlando, FL 32801',
@@ -104,6 +115,7 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
       try {
         const workbook = XLSX.read(reader.result, { type: 'array' })
         const parsed: ImportRow[] = []
+        const addressByProject = new Map<string, string>()
 
         workbook.SheetNames.forEach(sheetName => {
           const sheet = workbook.Sheets[sheetName]
@@ -131,7 +143,10 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
             const row: Record<string, unknown> = Object.fromEntries(headers.map((header, idx) => [header, values[idx]]))
             const operation = detectOperation(row)
             const projectAddress = isAddressLike(projectName) ? projectName : ''
-            const address = projectAddress || deterministicAddress(accountName, projectName, binNumber)
+            const projectKey = `${accountName}|${projectName}`.toLowerCase()
+            if (projectAddress) addressByProject.set(projectKey, projectAddress)
+            if (!addressByProject.has(projectKey)) addressByProject.set(projectKey, deterministicAddress(accountName, projectName, binNumber))
+            const address = addressByProject.get(projectKey) || projectAddress
 
             parsed.push({
               id: `${sheetName}-${index}-${binNumber}`,
@@ -167,6 +182,17 @@ function uniqueBy<T>(rows: T[], key: (row: T) => string) {
   })
 }
 
+const emptyStats: ImportStats = {
+  clientsCreated: 0,
+  clientsReused: 0,
+  jobsitesCreated: 0,
+  jobsitesReused: 0,
+  equipmentCreated: 0,
+  equipmentUpdated: 0,
+  servicesCreated: 0,
+  servicesSkipped: 0,
+}
+
 export default function BulkImportPage() {
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<ImportRow[]>([])
@@ -175,17 +201,19 @@ export default function BulkImportPage() {
   const [message, setMessage] = useState('')
   const [importing, setImporting] = useState(false)
   const [report, setReport] = useState<string[]>([])
+  const [stats, setStats] = useState<ImportStats | null>(null)
 
   const clients = useMemo(() => uniqueBy(rows, row => row.accountName.toLowerCase()), [rows])
   const jobsites = useMemo(() => uniqueBy(rows, row => `${row.accountName}|${row.projectName}|${row.address}`.toLowerCase()), [rows])
   const equipment = useMemo(() => uniqueBy(rows, row => row.binNumber), [rows])
-  const activeRows = rows.filter(row => row.operation !== 'pickup')
+  const serviceRows = rows
 
   const handleFile = async (file?: File) => {
     if (!file) return
     setError('')
     setMessage('')
     setReport([])
+    setStats(null)
     setFileName(file.name)
     try {
       const parsed = await parseWorkbook(file)
@@ -203,6 +231,7 @@ export default function BulkImportPage() {
     setError('')
     setReport([])
     const notes: string[] = []
+    const nextStats = { ...emptyStats }
 
     const clientIdByName = new Map<string, string>()
     const jobsiteIdByKey = new Map<string, string>()
@@ -223,11 +252,12 @@ export default function BulkImportPage() {
         const { data: existing } = await supabase
           .from('clients')
           .select('id')
-          .eq('company_name', row.accountName)
+          .ilike('company_name', row.accountName)
           .limit(1)
 
         if (existing?.[0]?.id) {
           clientIdByName.set(row.accountName.toLowerCase(), existing[0].id)
+          nextStats.clientsReused++
           continue
         }
 
@@ -237,7 +267,10 @@ export default function BulkImportPage() {
           .select('id')
           .single()
         if (err) notes.push(`Client ${row.accountName}: ${err.message}`)
-        else clientIdByName.set(row.accountName.toLowerCase(), data.id)
+        else {
+          clientIdByName.set(row.accountName.toLowerCase(), data.id)
+          nextStats.clientsCreated++
+        }
       }
 
       for (const row of jobsites) {
@@ -245,12 +278,13 @@ export default function BulkImportPage() {
         const { data: existing } = await supabase
           .from('jobsites')
           .select('id')
-          .eq('name', row.projectName)
-          .eq('address', row.address)
+          .ilike('name', row.projectName)
+          .ilike('address', row.address)
           .limit(1)
 
         if (existing?.[0]?.id) {
           jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), existing[0].id)
+          nextStats.jobsitesReused++
           continue
         }
 
@@ -260,7 +294,10 @@ export default function BulkImportPage() {
           .select('id')
           .single()
         if (err) notes.push(`Jobsite ${row.projectName}: ${err.message}`)
-        else jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), data.id)
+        else {
+          jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), data.id)
+          nextStats.jobsitesCreated++
+        }
       }
 
       for (const row of equipment) {
@@ -283,23 +320,37 @@ export default function BulkImportPage() {
         const { data: existing } = await supabase
           .from('equipment')
           .select('id')
-          .eq('container_number', latest.binNumber)
+          .or(`container_number.eq.${latest.binNumber},bin_number.eq.${latest.binNumber}`)
           .limit(1)
-        const { error: err } = existing?.[0]?.id
+        const wasExisting = Boolean(existing?.[0]?.id)
+        const { error: err } = wasExisting
           ? await supabase.from('equipment').update(payload).eq('id', existing[0].id)
           : await supabase.from('equipment').insert(payload)
         if (err) notes.push(`Bin ${latest.binNumber}: ${err.message}`)
+        else if (wasExisting) nextStats.equipmentUpdated++
+        else nextStats.equipmentCreated++
       }
 
-      for (const row of activeRows) {
-        const { data: existing } = await supabase
+      for (const row of serviceRows) {
+        const { data: existingExact } = await supabase
           .from('service_requests')
           .select('id')
           .eq('bin_number', row.binNumber)
           .eq('jobsite_address', row.address)
           .limit(1)
+        const { data: existingByProject } = existingExact?.[0]?.id
+          ? { data: existingExact }
+          : await supabase
+            .from('service_requests')
+            .select('id')
+            .eq('bin_number', row.binNumber)
+            .ilike('notes', `%${row.projectName}%`)
+            .limit(1)
 
-        if (existing?.[0]?.id) continue
+        if (existingByProject?.[0]?.id) {
+          nextStats.servicesSkipped++
+          continue
+        }
 
         const { error: err } = await supabase.from('service_requests').insert({
           client_id: clientIdByName.get(row.accountName.toLowerCase()) || null,
@@ -314,10 +365,12 @@ export default function BulkImportPage() {
           notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}${row.comments ? `\n${row.comments}` : ''}`,
         })
         if (err) notes.push(`Service ${row.binNumber}: ${err.message}`)
+        else nextStats.servicesCreated++
       }
 
       setReport(notes)
-      setMessage(notes.length ? `Import finished with ${notes.length} warnings.` : `Imported ${clients.length} clients, ${jobsites.length} jobsites, ${equipment.length} bins, and ${activeRows.length} active service records.`)
+      setStats(nextStats)
+      setMessage(notes.length ? `Import completed with ${notes.length} row warnings. Records that passed validation were saved.` : 'Import completed without warnings.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed.')
     } finally {
@@ -354,7 +407,7 @@ export default function BulkImportPage() {
               ['Clients', clients.length],
               ['Jobsites', jobsites.length],
               ['Bins', equipment.length],
-              ['Active Services', activeRows.length],
+              ['Service Records', serviceRows.length],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3">
                 <div className="text-2xl font-bold text-white">{value}</div>
@@ -403,6 +456,22 @@ export default function BulkImportPage() {
               <div className="mt-2 max-h-60 overflow-auto space-y-1 text-xs text-yellow-100/80">
                 {report.map((item, index) => <div key={`${item}-${index}`}>{item}</div>)}
               </div>
+            </div>
+          )}
+
+          {stats && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                ['Clients', `${stats.clientsCreated} new / ${stats.clientsReused} reused`],
+                ['Jobsites', `${stats.jobsitesCreated} new / ${stats.jobsitesReused} reused`],
+                ['Equipment', `${stats.equipmentCreated} new / ${stats.equipmentUpdated} updated`],
+                ['Services', `${stats.servicesCreated} new / ${stats.servicesSkipped} skipped`],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3">
+                  <div className="text-sm font-semibold text-white">{value}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+                </div>
+              ))}
             </div>
           )}
         </>
