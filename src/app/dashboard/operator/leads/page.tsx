@@ -109,7 +109,7 @@ export default function LeadsPage() {
         <div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-16 bg-slate-800/40 rounded-xl animate-pulse"/>)}</div>
       ) : leads.length===0 ? (
         <div className="card text-center py-12">
-          <div className="text-4xl mb-3">📋</div>
+          <div className="text-4xl mb-3"></div>
           <h3 className="font-semibold text-white mb-2">No leads yet</h3>
           <p className="text-slate-400 text-sm">Share the <a href="/quotes" target="_blank" className="text-sky-400 hover:underline">public quote form</a> to start receiving requests.</p>
         </div>
@@ -127,7 +127,7 @@ export default function LeadsPage() {
                     {lead.status==='open' && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 animate-pulse">New</span>}
                   </div>
                   <div className="flex gap-4 text-xs text-slate-400 flex-wrap">
-                    <span>{lead.equipment_type}{lead.dumpster_size ? ` · ${lead.dumpster_size}` : ''}</span>
+                    <span>{lead.equipment_type}{lead.dumpster_size ? `  ${lead.dumpster_size}` : ''}</span>
                     <span>{lead.city}, {lead.zip}</span>
                     <span>{lead.job_type}</span>
                     {lead.phone && <span>{lead.phone}</span>}
@@ -152,9 +152,9 @@ export default function LeadsPage() {
                   <h3 className="font-bold text-white text-lg">{selected.name}</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${SC[selected.status]?.bg} ${SC[selected.status]?.color}`}>{SC[selected.status]?.label}</span>
                 </div>
-                <div className="text-slate-400 text-sm">{selected.email}{selected.phone ? ` · ${selected.phone}` : ''}</div>
+                <div className="text-slate-400 text-sm">{selected.email}{selected.phone ? `  ${selected.phone}` : ''}</div>
               </div>
-              <button onClick={() => setSelected(null)} className="text-slate-500 hover:text-white p-1">✕</button>
+              <button onClick={() => setSelected(null)} className="text-slate-500 hover:text-white p-1"></button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -183,7 +183,7 @@ export default function LeadsPage() {
 
               <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4">
                 <p className="text-sm font-semibold text-white mb-3">Send SMS via Quo</p>
-                {!selected.phone && <p className="text-slate-500 text-xs italic mb-3">No phone number — reach via email.</p>}
+                {!selected.phone && <p className="text-slate-500 text-xs italic mb-3">No phone number  reach via email.</p>}
                 <div className="mb-3">
                   <label className="block text-xs text-slate-400 mb-1">ETA / Schedule / Quote</label>
                   <input type="text" className="input text-sm py-2" placeholder="e.g. tomorrow at 9am, $450/week"
