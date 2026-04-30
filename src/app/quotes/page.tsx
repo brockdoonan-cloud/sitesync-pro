@@ -1,1 +1,196 @@
-J3VzZSBjbGllbnQnCmltcG9ydCB7IHVzZVN0YXRlIH0gZnJvbSAncmVhY3QnCmltcG9ydCB7IGNyZWF0ZUNsaWVudCB9IGZyb20gJ0AvbGliL3N1cGFiYXNlL2NsaWVudCcKaW1wb3J0IExpbmsgZnJvbSAnbmV4dC9saW5rJwoKY29uc3QgRVFVSVBNRU5UX1RZUEVTID0gWydEdW1wc3RlciAvIFJvbGwtb2ZmJywgJ1dhc2hvdXQgQ29udGFpbmVyJywgJ1NsdXJyeSBUYW5rJywgJ1BvcnRhIFBvdHR5JywgJ1dhdGVyIFRhbmsnLCAnU3RvcmFnZSBDb250YWluZXInLCAnT3RoZXInXQpjb25zdCBEVU1QU1RFUl9TSVpFUyA9IFsnMTAteWFyZCcsICcyMC15YXJkJywgJzMwLXlhcmQnLCAnNDAteWFyZCddCmNvbnN0IEpPQl9UWVBFUyA9IFsnUmVzaWRlbnRpYWwnLCAnQ29tbWVyY2lhbCcsICdDb25zdHJ1Y3Rpb24nLCAnQ2xlYW51cCcsICdPdGhlciddCgpleHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBRdW90ZXNQYWdlKCkgewogIGNvbnN0IFtuYW1lLCBzZXROYW1lXSA9IHVzZVN0YXRlKCcnKQogIGNvbnN0IFtlbWFpbCwgc2V0RW1haWxdID0gdXNlU3RhdGUoJycpCiAgY29uc3QgW3Bob25lLCBzZXRQaG9uZV0gPSB1c2VTdGF0ZSgnJykKICBjb25zdCBbY2l0eSwgc2V0Q2l0eV0gPSB1c2VTdGF0ZSgnJykKICBjb25zdCBbemlwLCBzZXRaaXBdID0gdXNlU3RhdGUoJycpCiAgY29uc3QgW2VxdWlwbWVudFR5cGUsIHNldEVxdWlwbWVudFR5cGVdID0gdXNlU3RhdGUoJycpCiAgY29uc3QgW2R1bXBzdGVyU2l6ZSwgc2V0RHVtcHN0ZXJTaXplXSA9IHVzZVN0YXRlKCcnKQogIGNvbnN0IFtqb2JUeXBlLCBzZXRKb2JUeXBlXSA9IHVzZVN0YXRlKCcnKQogIGNvbnN0IFtzdGFydERhdGUsIHNldFN0YXJ0RGF0ZV0gPSB1c2VTdGF0ZSgnJykKICBjb25zdCBbZW5kRGF0ZSwgc2V0RW5kRGF0ZV0gPSB1c2VTdGF0ZSgnJykKICBjb25zdCBbbm90ZXMsIHNldE5vdGVzXSA9IHVzZVN0YXRlKCcnKQogIGNvbnN0IFtsb2FkaW5nLCBzZXRMb2FkaW5nXSA9IHVzZVN0YXRlKGZhbHNlKQogIGNvbnN0IFtzdWJtaXR0ZWQsIHNldFN1Ym1pdHRlZF0gPSB1c2VTdGF0ZShmYWxzZSkKICBjb25zdCBbZXJyb3IsIHNldEVycm9yXSA9IHVzZVN0YXRlKCcnKQoKICBjb25zdCBzdXBhYmFzZSA9IGNyZWF0ZUNsaWVudCgpCgogIGNvbnN0IGhhbmRsZVN1Ym1pdCA9IGFzeW5jICgpID0+IHsKICAgIGlmICghY2l0eSB8fCAhemlwIHx8ICFlcXVpcG1lbnRUeXBlIHx8ICFqb2JUeXBlKSB7CiAgICAgIHNldEVycm9yKCdQbGVhc2UgZmlsbCBpbiBsb2NhdGlvbiwgZXF1aXBtZW50IHR5cGUsIGFuZCBqb2IgdHlwZS4nKQogICAgICByZXR1cm4KICAgIH0KICAgIGlmICghbmFtZSB8fCAhZW1haWwpIHsKICAgICAgc2V0RXJyb3IoJ1BsZWFzZSBwcm92aWRlIHlvdXIgbmFtZSBhbmQgZW1haWwgc28gcHJvdmlkZXJzIGNhbiByZWFjaCB5b3UuJykKICAgICAgcmV0dXJuCiAgICB9CiAgICBzZXRMb2FkaW5nKHRydWUpCiAgICBzZXRFcnJvcignJykKICAgIGNvbnN0IHsgZXJyb3I6IGVyciB9ID0gYXdhaXQgc3VwYWJhc2UuZnJvbSgncXVvdGVfcmVxdWVzdHMnKS5pbnNlcnQoewogICAgICBuYW1lLAogICAgICBlbWFpbCwKICAgICAgcGhvbmU6IHBob25lIHx8IG51bGwsCiAgICAgIGNpdHksCiAgICAgIHppcCwKICAgICAgZXF1aXBtZW50X3R5cGU6IGVxdWlwbWVudFR5cGUsCiAgICAgIGR1bXBzdGVyX3NpemU6IGR1bXBzdGVyU2l6ZSB8fCBudWxsLAogICAgICBzdGFydF9kYXRlOiBzdGFydERhdGUgfHwgbnVsbCwKICAgICAgZW5kX2RhdGU6IGVuZERhdGUgfHwgbnVsbCwKICAgICAgam9iX3R5cGU6IGpvYlR5cGUsCiAgICAgIG5vdGVzOiBub3RlcyB8fCBudWxsLAogICAgICBzdGF0dXM6ICdvcGVuJywKICAgIH0pCiAgICBpZiAoZXJyKSB7CiAgICAgIHNldEVycm9yKGVyci5tZXNzYWdlKQogICAgICBzZXRMb2FkaW5nKGZhbHNlKQogICAgfSBlbHNlIHsKICAgICAgc2V0U3VibWl0dGVkKHRydWUpCiAgICB9CiAgfQoKICBpZiAoc3VibWl0dGVkKSB7CiAgICByZXR1cm4gKAogICAgICA8ZGl2IGNsYXNzTmFtZT0ibWluLWgtc2NyZWVuIGJnLXNsYXRlLTk1MCBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciBweC00Ij4KICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibWF4LXctbGcgdy1mdWxsIHRleHQtY2VudGVyIj4KICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJ3LTI0IGgtMjQgYmctZ3JlZW4tNTAwLzIwIHJvdW5kZWQtZnVsbCBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciBteC1hdXRvIG1iLTYgcmluZy00IHJpbmctZ3JlZW4tNTAwLzMwIj4KICAgICAgICAgICAgPHN2ZyBjbGFzc05hbWU9InctMTIgaC0xMiB0ZXh0LWdyZWVuLTQwMCIgZmlsbD0ibm9uZSIgdmlld0JveD0iMCAwIDI0IDI0IiBzdHJva2U9ImN1cnJlbnRDb2xvciI+CiAgICAgICAgICAgICAgPHBhdGggc3Ryb2tlTGluZWNhcD0icm91bmQiIHN0cm9rZUxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlV2lkdGg9ezJ9IGQ9Ik01IDEzbDQgNEwxOSA3IiAvPgogICAgICAgICAgICA8L3N2Zz4KICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPGgxIGNsYXNzTmFtZT0idGV4dC0zeGwgZm9udC1ib2xkIHRleHQtd2hpdGUgbWItMyI+UmVxdWVzdCBTZW50ITwvaDE+CiAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc2xhdGUtNDAwIG1iLTIgdGV4dC1sZyI+CiAgICAgICAgICAgIFlvdXIgcmVxdWVzdCBoYXMgYmVlbiBzZW50IHRvIGxvY2FsIHByb3ZpZGVycyBpbiA8c3BhbiBjbGFzc05hbWU9InRleHQtc2t5LTQwMCBmb250LXNlbWlib2xkIj57Y2l0eX0sIHt6aXB9PC9zcGFuPi4KICAgICAgICAgIDwvcD4KICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1zbGF0ZS01MDAgdGV4dC1zbSBtYi04Ij4KICAgICAgICAgICAgUHJvdmlkZXJzIHdpbGwgc2VuZCBxdW90ZXMgdG8gPHN0cm9uZyBjbGFzc05hbWU9InRleHQtc2xhdGUtMzAwIj57ZW1haWx9PC9zdHJvbmc+LiBNb3N0IGFycml2ZSB3aXRoaW4gMeKAkzIgYnVzaW5lc3MgaG91cnMuCiAgICAgICAgICA8L3A+CiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBnYXAtMyBqdXN0aWZ5LWNlbnRlciI+CiAgICAgICAgICAgIDxidXR0b24gb25DbGljaz17KCkgPT4gc2V0U3VibWl0dGVkKGZhbHNlKX0gY2xhc3NOYW1lPSJidG4tc2Vjb25kYXJ5IHB4LTYgcHktMi41Ij5TdWJtaXQgQW5vdGhlcjwvYnV0dG9uPgogICAgICAgICAgICA8TGluayBocmVmPSIvIiBjbGFzc05hbWU9ImJ0bi1wcmltYXJ5IHB4LTYgcHktMi41Ij5CYWNrIHRvIEhvbWU8L0xpbms+CiAgICAgICAgICA8L2Rpdj4KICAgICAgICA8L2Rpdj4KICAgICAgPC9kaXY+CiAgICApCiAgfQoKICByZXR1cm4gKAogICAgPGRpdiBjbGFzc05hbWU9Im1pbi1oLXNjcmVlbiBiZy1zbGF0ZS05NTAiPgogICAgICA8ZGl2IGNsYXNzTmFtZT0iYmctZ3JhZGllbnQtdG8tYiBmcm9tLXNsYXRlLTkwMCB0by1zbGF0ZS05NTAgYm9yZGVyLWIgYm9yZGVyLXNsYXRlLTgwMC82MCBweS0xMiBweC00Ij4KICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibWF4LXctMnhsIG14LWF1dG8gdGV4dC1jZW50ZXIiPgogICAgICAgICAgPExpbmsgaHJlZj0iLyIgY2xhc3NOYW1lPSJpbmxpbmUtZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTIgbWItOCBob3ZlcjpvcGFjaXR5LTgwIHRyYW5zaXRpb24tb3BhY2l0eSI+CiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJ3LTggaC04IGJnLXNreS01MDAgcm91bmRlZC1sZyBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciI+CiAgICAgICAgICAgICAgPHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSI+CiAgICAgICAgICAgICAgICA8cGF0aCBkPSJNNCAyMEwxMCA4TDE2IDE2TDIwIDEwTDI0IDIwSDRaIiBmaWxsPSJ3aGl0ZSIgLz4KICAgICAgICAgICAgICA8L3N2Zz4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0iZm9udC1ib2xkIHRleHQtd2hpdGUiPlNpdGVTeW5jIFBybzwvc3Bhbj4KICAgICAgICAgIDwvTGluaz4KICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJpbmxpbmUtZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTIgYmctc2t5LTUwMC8xMCBib3JkZXIgYm9yZGVyLXNreS01MDAvMjAgcm91bmRlZC1mdWxsIHB4LTQgcHktMS41IHRleHQtc2t5LTQwMCB0ZXh0LXNtIGZvbnQtbWVkaXVtIG1iLTUiPgogICAgICAgICAgICBGcmVlIFF1b3RlIFJlcXVlc3Qg4oCUIE5vIE9ibGlnYXRpb24KICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPGgxIGNsYXNzTmFtZT0idGV4dC00eGwgZm9udC1ib2xkIHRleHQtd2hpdGUgbWItNCI+CiAgICAgICAgICAgIEdldCBFcXVpcG1lbnQgUXVvdGVzPGJyIC8+ZnJvbSBMb2NhbCBQcm92aWRlcnMKICAgICAgICAgIDwvaDE+CiAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc2xhdGUtNDAwIHRleHQtbGcgbWF4LXctbGcgbXgtYXV0byI+CiAgICAgICAgICAgIER1bXBzdGVycywgd2FzaG91dCBjb250YWluZXJzLCBwb3J0YWJsZSB0b2lsZXRzLCB0YW5rcyBhbmQgbW9yZS4gRmlsbCBvdXQgdGhlIGZvcm0gYW5kIGxvY2FsIHJlbnRhbCBjb21wYW5pZXMgd2lsbCBzZW5kIGNvbXBldGl0aXZlIHF1b3Rlcy4KICAgICAgICAgIDwvcD4KICAgICAgICA8L2Rpdj4KICAgICAgPC9kaXY+CgogICAgICA8ZGl2IGNsYXNzTmFtZT0ibWF4LXctMnhsIG14LWF1dG8gcHgtNCBweS0xMCI+CiAgICAgICAge2Vycm9yICYmICgKICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJiZy1yZWQtNTAwLzEwIGJvcmRlciBib3JkZXItcmVkLTUwMC8zMCB0ZXh0LXJlZC00MDAgdGV4dC1zbSByb3VuZGVkLXhsIHB4LTQgcHktMyBtYi02Ij4KICAgICAgICAgICAge2Vycm9yfQogICAgICAgICAgPC9kaXY+CiAgICAgICAgKX0KCiAgICAgICAgPGRpdiBjbGFzc05hbWU9InNwYWNlLXktNiI+CiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iYmctc2xhdGUtODAwLzQwIGJvcmRlciBib3JkZXItc2xhdGUtNzAwLzUwIHJvdW5kZWQtMnhsIHAtNiBzcGFjZS15LTQiPgogICAgICAgICAgICA8aDIgY2xhc3NOYW1lPSJmb250LXNlbWlib2xkIHRleHQtd2hpdGUiPjEuIFlvdXIgQ29udGFjdCBJbmZvPC9oMj4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImdyaWQgZ3JpZC1jb2xzLTEgc206Z3JpZC1jb2xzLTIgZ2FwLTQiPgogICAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRleHQtc2xhdGUtMzAwIG1iLTEuNSI+RnVsbCBOYW1lICo8L2xhYmVsPgogICAgICAgICAgICAgICAgPGlucHV0IHR5cGU9InRleHQiIGNsYXNzTmFtZT0iaW5wdXQiIHBsYWNlaG9sZGVyPSJKYW5lIFNtaXRoIiB2YWx1ZT17bmFtZX0gb25DaGFuZ2U9e2UgPT4gc2V0TmFtZShlLnRhcmdldC52YWx1ZSl9IC8+CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICAgPGRpdj4KICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9ImJsb2NrIHRleHQtc20gZm9udC1tZWRpdW0gdGV4dC1zbGF0ZS0zMDAgbWItMS41Ij5FbWFpbCAqPC9sYWJlbD4KICAgICAgICAgICAgICAgIDxpbnB1dCB0eXBlPSJlbWFpbCIgY2xhc3NOYW1lPSJpbnB1dCIgcGxhY2Vob2xkZXI9ImphbmVAY29tcGFueS5jb20iIHZhbHVlPXtlbWFpbH0gb25DaGFuZ2U9e2UgPT4gc2V0RW1haWwoZS50YXJnZXQudmFsdWUpfSAvPgogICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJzbTpjb2wtc3Bhbi0yIj4KICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9ImJsb2NrIHRleHQtc20gZm9udC1tZWRpdW0gdGV4dC1zbGF0ZS0zMDAgbWItMS41Ij5QaG9uZSA8c3BhbiBjbGFzc05hbWU9InRleHQtc2xhdGUtNTAwIj4ob3B0aW9uYWwpPC9zcGFuPjwvbGFiZWw+CiAgICAgICAgICAgICAgICA8aW5wdXQgdHlwZT0idGVsIiBjbGFzc05hbWU9ImlucHV0IiBwbGFjZWhvbGRlcj0iKDQwNykgNTU1LTAxMDAiIHZhbHVlPXtwaG9uZX0gb25DaGFuZ2U9e2UgPT4gc2V0UGhvbmUoZS50YXJnZXQudmFsdWUpfSAvPgogICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDwvZGl2PgoKICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJiZy1zbGF0ZS04MDAvNDAgYm9yZGVyIGJvcmRlci1zbGF0ZS03MDAvNTAgcm91bmRlZC0yeGwgcC02IHNwYWNlLXktNCI+CiAgICAgICAgICAgIDxoMiBjbGFzc05hbWU9ImZvbnQtc2VtaWJvbGQgdGV4dC13aGl0ZSI+Mi4gRGVsaXZlcnkgTG9jYXRpb248L2gyPgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBncmlkLWNvbHMtMiBnYXAtNCI+CiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImNvbC1zcGFuLTIgc206Y29sLXNwYW4tMSI+CiAgICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRleHQtc2xhdGUtMzAwIG1iLTEuNSI+Q2l0eSAqPC9sYWJlbD4KICAgICAgICAgICAgICAgIDxpbnB1dCB0eXBlPSJ0ZXh0IiBjbGFzc05hbWU9ImlucHV0IiBwbGFjZWhvbGRlcj0iT3JsYW5kbyIgdmFsdWU9e2NpdHl9IG9uQ2hhbmdlPXtlID0+IHNldENpdHkoZS50YXJnZXQudmFsdWUpfSAvPgogICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRleHQtc2xhdGUtMzAwIG1iLTEuNSI+WklQICo8L2xhYmVsPgogICAgICAgICAgICAgICAgPGlucHV0IHR5cGU9InRleHQiIGNsYXNzTmFtZT0iaW5wdXQgZm9udC1tb25vIiBwbGFjZWhvbGRlcj0iMzI4MDEiIG1heExlbmd0aD17NX0gdmFsdWU9e3ppcH0gb25DaGFuZ2U9e2UgPT4gc2V0WmlwKGUudGFyZ2V0LnZhbHVlLnJlcGxhY2UoL1teMC05XS9nLCAnJykpfSAvPgogICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDwvZGl2PgoKICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJiZy1zbGF0ZS04MDAvNDAgYm9yZGVyIGJvcmRlci1zbGF0ZS03MDAvNTAgcm91bmRlZC0yeGwgcC02IHNwYWNlLXktNCI+CiAgICAgICAgICAgIDxoMiBjbGFzc05hbWU9ImZvbnQtc2VtaWJvbGQgdGV4dC13aGl0ZSI+My4gRXF1aXBtZW50IE5lZWRlZDwvaDI+CiAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT0iYmxvY2sgdGV4dC1zbSBmb250LW1lZGl1bSB0ZXh0LXNsYXRlLTMwMCBtYi0yIj5FcXVpcG1lbnQgVHlwZSAqPC9sYWJlbD4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBncmlkLWNvbHMtMiBnYXAtMiI+CiAgICAgICAgICAgICAgICB7RVFVSVBNRU5UX1RZUEVTLm1hcCh0ID0+ICgKICAgICAgICAgICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICAgICAgICAgIGtleT17dH0KICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBzZXRFcXVpcG1lbnRUeXBlKHQpfQogICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17YHAtMyByb3VuZGVkLXhsIGJvcmRlciB0ZXh0LWxlZnQgdGV4dC1zbSB0cmFuc2l0aW9uLWNvbG9ycyAke2VxdWlwbWVudFR5cGUgPT09IHQgPyAnYm9yZGVyLXNreS01MDAgYmctc2t5LTUwMC8xMCB0ZXh0LXdoaXRlJyA6ICdib3JkZXItc2xhdGUtNjAwIHRleHQtc2xhdGUtNDAwIGhvdmVyOmJvcmRlci1zbGF0ZS01MDAnfWB9CiAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICB7dH0KICAgICAgICAgICAgICAgICAgPC9idXR0b24+CiAgICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPC9kaXY+CgogICAgICAgICAgICB7ZXF1aXBtZW50VHlwZS5pbmNsdWRlcygnRHVtcHN0ZXInKSAmJiAoCiAgICAgICAgICAgICAgPGRpdj4KICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9ImJsb2NrIHRleHQtc20gZm9udC1tZWRpdW0gdGV4dC1zbGF0ZS0zMDAgbWItMiI+RHVtcHN0ZXIgU2l6ZTwvbGFiZWw+CiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBncmlkLWNvbHMtNCBnYXAtMiI+CiAgICAgICAgICAgICAgICAgIHtEVU1QU1RFUl9TSVpFUy5tYXAocyA9PiAoCiAgICAgICAgICAgICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICAgICAgICAgICAga2V5PXtzfQogICAgICAgICAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gc2V0RHVtcHN0ZXJTaXplKHMpfQogICAgICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPXtgcHktMi41IHJvdW5kZWQteGwgYm9yZGVyIHRleHQtc20gZm9udC1tZWRpdW0gdHJhbnNpdGlvbi1jb2xvcnMgJHtkdW1wc3RlclNpemUgPT09IHMgPyAnYm9yZGVyLXNreS01MDAgYmctc2t5LTUwMC8xMCB0ZXh0LXNreS00MDAnIDogJ2JvcmRlci1zbGF0ZS02MDAgdGV4dC1zbGF0ZS00MDAgaG92ZXI6Ym9yZGVyLXNsYXRlLTUwMCd9YH0KICAgICAgICAgICAgICAgICAgICA+CiAgICAgICAgICAgICAgICAgICAgICB7c30KICAgICAgICAgICAgICAgICAgICA8L2J1dHRvbj4KICAgICAgICAgICAgICAgICAgKSl9CiAgICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgKX0KCiAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT0iYmxvY2sgdGV4dC1zbSBmb250LW1lZGl1bSB0ZXh0LXNsYXRlLTMwMCBtYi0yIj5Kb2IgVHlwZSAqPC9sYWJlbD4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBncmlkLWNvbHMtMiBzbTpncmlkLWNvbHMtMyBnYXAtMiI+CiAgICAgICAgICAgICAgICB7Sk9CX1RZUEVTLm1hcChqID0+ICgKICAgICAgICAgICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICAgICAgICAgIGtleT17an0KICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBzZXRKb2JUeXBlKGopfQogICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17YHB5LTIuNSByb3VuZGVkLXhsIGJvcmRlciB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRyYW5zaXRpb24tY29sb3JzICR7am9iVHlwZSA9PT0gaiA/ICdib3JkZXItZW1lcmFsZC01MDAgYmctZW1lcmFsZC01MDAvMTAgdGV4dC1lbWVyYWxkLTQwMCcgOiAnYm9yZGVyLXNsYXRlLTYwMCB0ZXh0LXNsYXRlLTQwMCBob3Zlcjpib3JkZXItc2xhdGUtNTAwJ31gfQogICAgICAgICAgICAgICAgICA+CiAgICAgICAgICAgICAgICAgICAge2p9CiAgICAgICAgICAgICAgICAgIDwvYnV0dG9uPgogICAgICAgICAgICAgICAgKSl9CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPC9kaXY+CgogICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImJnLXNsYXRlLTgwMC80MCBib3JkZXIgYm9yZGVyLXNsYXRlLTcwMC81MCByb3VuZGVkLTJ4bCBwLTYgc3BhY2UteS00Ij4KICAgICAgICAgICAgPGgyIGNsYXNzTmFtZT0iZm9udC1zZW1pYm9sZCB0ZXh0LXdoaXRlIj40LiBUaW1lZnJhbWU8L2gyPgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBncmlkLWNvbHMtMiBnYXAtNCI+CiAgICAgICAgICAgICAgPGRpdj4KICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9ImJsb2NrIHRleHQtc20gZm9udC1tZWRpdW0gdGV4dC1zbGF0ZS0zMDAgbWItMS41Ij5TdGFydCBEYXRlPC9sYWJlbD4KICAgICAgICAgICAgICAgIDxpbnB1dCB0eXBlPSJkYXRlIiBjbGFzc05hbWU9ImlucHV0IiB2YWx1ZT17c3RhcnREYXRlfSBvbkNoYW5nZT17ZSA9PiBzZXRTdGFydERhdGUoZS50YXJnZXQudmFsdWUpfSAvPgogICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgICA8bGFiZWwgY2xhc3NOYW1lPSJibG9jayB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRleHQtc2xhdGUtMzAwIG1iLTEuNSI+RW5kIERhdGU8L2xhYmVsPgogICAgICAgICAgICAgICAgPGlucHV0IHR5cGU9ImRhdGUiIGNsYXNzTmFtZT0iaW5wdXQiIHZhbHVlPXtlbmREYXRlfSBvbkNoYW5nZT17ZSA9PiBzZXRFbmREYXRlKGUudGFyZ2V0LnZhbHVlKX0gLz4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICA8L2Rpdj4KCiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iYmctc2xhdGUtODAwLzQwIGJvcmRlciBib3JkZXItc2xhdGUtNzAwLzUwIHJvdW5kZWQtMnhsIHAtNiI+CiAgICAgICAgICAgIDxsYWJlbCBjbGFzc05hbWU9ImJsb2NrIHRleHQtc20gZm9udC1tZWRpdW0gdGV4dC1zbGF0ZS0zMDAgbWItMS41Ij5Ob3RlcyA8c3BhbiBjbGFzc05hbWU9InRleHQtc2xhdGUtNTAwIj4ob3B0aW9uYWwpPC9zcGFuPjwvbGFiZWw+CiAgICAgICAgICAgIDx0ZXh0YXJlYSBjbGFzc05hbWU9ImlucHV0IG1pbi1oLVsxMDBweF0gcmVzaXplLW5vbmUiIHBsYWNlaG9sZGVyPSJHYXRlIGNvZGUsIHNpdGUgYWNjZXNzIGRldGFpbHMsIHdlaWdodCByZXN0cmljdGlvbnMuLi4iIHZhbHVlPXtub3Rlc30gb25DaGFuZ2U9e2UgPT4gc2V0Tm90ZXMoZS50YXJnZXQudmFsdWUpfSAvPgogICAgICAgICAgPC9kaXY+CgogICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICBvbkNsaWNrPXtoYW5kbGVTdWJtaXR9CiAgICAgICAgICAgIGRpc2FibGVkPXtsb2FkaW5nfQogICAgICAgICAgICBjbGFzc05hbWU9InctZnVsbCBweS00IHJvdW5kZWQtMnhsIGZvbnQtYm9sZCB0ZXh0LXdoaXRlIHRleHQteGwgdHJhbnNpdGlvbi1hbGwgYmctZ3JhZGllbnQtdG8tciBmcm9tLXNreS01MDAgdG8tYmx1ZS02MDAgaG92ZXI6ZnJvbS1za3ktNDAwIGhvdmVyOnRvLWJsdWUtNTAwIGRpc2FibGVkOm9wYWNpdHktNjAgZGlzYWJsZWQ6Y3Vyc29yLW5vdC1hbGxvd2VkIGZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktY2VudGVyIGdhcC0zIHNoYWRvdy1sZyBzaGFkb3ctc2t5LTUwMC8yMCIKICAgICAgICAgID4KICAgICAgICAgICAge2xvYWRpbmcgPyAnU2VuZGluZyB0byBQcm92aWRlcnMuLi4nIDogJ0dldCBGcmVlIFF1b3Rlcyd9CiAgICAgICAgICA8L2J1dHRvbj4KICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1jZW50ZXIgdGV4dC1zbGF0ZS02MDAgdGV4dC14cyI+Tm8gc3BhbSDigJQgcHJvdmlkZXJzIG9ubHkgY29udGFjdCB5b3UgYWJvdXQgeW91ciByZXF1ZXN0LiBGcmVlIHRvIHVzZS48L3A+CiAgICAgICAgPC9kaXY+CiAgICAgIDwvZGl2PgogICAgPC9kaXY+CiAgKQp9Cg==
+'use client'
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
+
+const EQUIPMENT_TYPES = ['Dumpster / Roll-off', 'Washout Container', 'Slurry Tank', 'Porta Potty', 'Water Tank', 'Storage Container', 'Other']
+const DUMPSTER_SIZES = ['10-yard', '20-yard', '30-yard', '40-yard']
+const JOB_TYPES = ['Residential', 'Commercial', 'Construction', 'Cleanup', 'Other']
+
+export default function QuotesPage() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [city, setCity] = useState('')
+  const [zip, setZip] = useState('')
+  const [equipmentType, setEquipmentType] = useState('')
+  const [dumpsterSize, setDumpsterSize] = useState('')
+  const [jobType, setJobType] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const supabase = createClient()
+
+  const handleSubmit = async () => {
+    if (!city || !zip || !equipmentType || !jobType) {
+      setError('Please fill in location, equipment type, and job type.')
+      return
+    }
+    if (!name || !email) {
+      setError('Please provide your name and email.')
+      return
+    }
+    setLoading(true)
+    setError('')
+    const { error: err } = await supabase.from('quote_requests').insert({
+      name, email, phone: phone || null, city, zip,
+      equipment_type: equipmentType, dumpster_size: dumpsterSize || null,
+      start_date: startDate || null, end_date: endDate || null,
+      job_type: jobType, notes: notes || null, status: 'open',
+    })
+    if (err) { setError(err.message); setLoading(false) }
+    else { setSubmitted(true) }
+  }
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+        <div className="max-w-lg w-full text-center">
+          <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-green-500/30">
+            <svg className="w-12 h-12 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-3">Request Sent!</h1>
+          <p className="text-slate-400 mb-2 text-lg">
+            Your request was sent to local providers in{' '}
+            <span className="text-sky-400 font-semibold">{city}, {zip}</span>.
+          </p>
+          <p className="text-slate-500 text-sm mb-8">
+            Quotes will be sent to <strong className="text-slate-300">{email}</strong>.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => setSubmitted(false)} className="btn-secondary px-6 py-2.5">Submit Another</button>
+            <Link href="/" className="btn-primary px-6 py-2.5">Back to Home</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950">
+      <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800/60 py-12 px-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <Link href="/" className="inline-flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
+            <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
+                <path d="M4 20L10 8L16 16L20 10L24 20H4Z" fill="white" />
+              </svg>
+            </div>
+            <span className="font-bold text-white">SiteSync Pro</span>
+          </Link>
+          <h1 className="text-4xl font-bold text-white mb-4">
+            Get Equipment Quotes<br />from Local Providers
+          </h1>
+          <p className="text-slate-400 text-lg max-w-lg mx-auto">
+            Dumpsters, washout containers, portable toilets, tanks and more.
+          </p>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
+        {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
+
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <h2 className="font-semibold text-white">1. Your Contact Info</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Full Name *</label>
+              <input type="text" className="input" placeholder="Jane Smith" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email *</label>
+              <input type="email" className="input" placeholder="jane@company.com" value={email} onChange={e => setEmail(e.target.value)} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone <span className="text-slate-500">(optional)</span></label>
+              <input type="tel" className="input" placeholder="(407) 555-0100" value={phone} onChange={e => setPhone(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <h2 className="font-semibold text-white">2. Delivery Location</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
+              <input type="text" className="input" placeholder="Orlando" value={city} onChange={e => setCity(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">ZIP *</label>
+              <input type="text" className="input font-mono" placeholder="32801" maxLength={5} value={zip} onChange={e => setZip(e.target.value.replace(/[^0-9]/g, ''))} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <h2 className="font-semibold text-white">3. Equipment Needed</h2>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Equipment Type *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {EQUIPMENT_TYPES.map(t => (
+                <button key={t} onClick={() => setEquipmentType(t)}
+                  className={`p-3 rounded-xl border text-left text-sm transition-colors ${equipmentType === t ? 'border-sky-500 bg-sky-500/10 text-white' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          {equipmentType.includes('Dumpster') && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Dumpster Size</label>
+              <div className="grid grid-cols-4 gap-2">
+                {DUMPSTER_SIZES.map(s => (
+                  <button key={s} onClick={() => setDumpsterSize(s)}
+                    className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${dumpsterSize === s ? 'border-sky-500 bg-sky-500/10 text-sky-400' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Job Type *</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {JOB_TYPES.map(j => (
+                <button key={j} onClick={() => setJobType(j)}
+                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${jobType === j ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}>
+                  {j}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
+          <h2 className="font-semibold text-white">4. Timeframe</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Start Date</label>
+              <input type="date" className="input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">End Date</label>
+              <input type="date" className="input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6">
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">Notes <span className="text-slate-500">(optional)</span></label>
+          <textarea className="input min-h-[100px] resize-none" placeholder="Gate code, site access details, weight restrictions..." value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+
+        <button onClick={handleSubmit} disabled={loading}
+          className="w-full py-4 rounded-2xl font-bold text-white text-xl transition-all bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg shadow-sky-500/20">
+          {loading ? 'Sending to Providers...' : 'Get Free Quotes'}
+        </button>
+        <p className="text-center text-slate-600 text-xs">No spam - providers only contact you about your request. Free to use.</p>
+      </div>
+    </div>
+  )
+}
