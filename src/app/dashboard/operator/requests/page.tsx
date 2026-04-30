@@ -1,3 +1,4 @@
+'use client'
 import { createClient } from '@/lib/supabase/server'
 import UpdateRequestStatus from '@/components/UpdateRequestStatus'
 
