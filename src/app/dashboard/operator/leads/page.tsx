@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type Lead = {
@@ -25,7 +25,7 @@ export default function LeadsPage() {
   const [sending, setSending] = useState(false)
   const [smsResult, setSmsResult] = useState('')
   const [note, setNote] = useState('')
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -34,7 +34,7 @@ export default function LeadsPage() {
     const { data } = await q
     setLeads(data || [])
     setLoading(false)
-  }, [filter])
+  }, [filter, supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -167,7 +167,7 @@ export default function LeadsPage() {
                 {selected.end_date && <div><span className="text-slate-500 block text-xs">End</span><span className="text-white">{selected.end_date}</span></div>}
                 {selected.duration_days && <div><span className="text-slate-500 block text-xs">Duration</span><span className="text-white">{selected.duration_days} days</span></div>}
               </div>
-              {selected.notes && <div className="bg-slate-700/40 rounded-lg p-3 text-slate-300 text-sm italic">"{selected.notes}"</div>}
+              {selected.notes && <div className="bg-slate-700/40 rounded-lg p-3 text-slate-300 text-sm italic">&ldquo;{selected.notes}&rdquo;</div>}
 
               <div>
                 <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Update Status</p>
@@ -183,7 +183,7 @@ export default function LeadsPage() {
 
               <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-4">
                 <p className="text-sm font-semibold text-white mb-3">Send SMS via Quo</p>
-                {!selected.phone && <p className="text-slate-500 text-xs italic mb-3">No phone number  reach via email.</p>}
+                {!selected.phone && <p className="text-slate-500 text-xs italic mb-3">No phone number on file. Reach out by email.</p>}
                 <div className="mb-3">
                   <label className="block text-xs text-slate-400 mb-1">ETA / Schedule / Quote</label>
                   <input type="text" className="input text-sm py-2" placeholder="e.g. tomorrow at 9am, $450/week"
