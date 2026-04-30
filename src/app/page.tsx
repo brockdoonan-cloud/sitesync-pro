@@ -23,7 +23,7 @@ export default function Home() {
         <div className="mt-12 grid grid-cols-3 gap-6 text-sm text-slate-400">
           {'['Live Bin Tracking', 'AI Route Optimizer', 'Auto Billing'].map(f => (
             <div key={f} className="flex items-center justify-center gap-2">
-              <span className="text-sky-400">•</span> {f}
+              <span className="text-sky-400"></span> {f}
             </div>
           ))}
         </div>
