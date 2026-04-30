@@ -187,6 +187,17 @@ export default function BulkImportPage() {
     const jobsiteIdByKey = new Map<string, string>()
 
     try {
+      const checks = await Promise.all([
+        supabase.from('clients').select('id,company_name').limit(1),
+        supabase.from('jobsites').select('id,address').limit(1),
+        supabase.from('equipment').select('id,bin_number,status,location,jobsite_id').limit(1),
+        supabase.from('service_requests').select('id,service_type,jobsite_address,preferred_date').limit(1),
+      ])
+      const failedCheck = checks.find(check => check.error)
+      if (failedCheck?.error) {
+        throw new Error(`Database repair is not applied yet: ${failedCheck.error.message}. Run supabase/repair_import_schema.sql in Supabase SQL Editor, then retry import.`)
+      }
+
       for (const row of clients) {
         const { data, error: err } = await supabase
           .from('clients')

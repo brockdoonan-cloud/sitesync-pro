@@ -1,14 +1,22 @@
 -- SiteSync Pro import/schema repair
 -- Run this once in Supabase SQL Editor before using the bulk import.
 
--- 1) Stop recursive profiles policies from breaking unrelated table inserts.
-drop policy if exists "Operators can read all profiles" on public.profiles;
-drop policy if exists "Operators can update profiles" on public.profiles;
-drop policy if exists "Admins can read all profiles" on public.profiles;
-drop policy if exists "Admins can update profiles" on public.profiles;
-drop policy if exists "Authenticated users can read profiles" on public.profiles;
-drop policy if exists "Users can read own profile" on public.profiles;
-drop policy if exists "Users can update own profile" on public.profiles;
+-- 1) Stop recursive policies from breaking unrelated table inserts.
+-- This intentionally drops every policy on these tables because older generated
+-- policies may have unknown names and may reference profiles recursively.
+do $$
+declare
+  policy_row record;
+begin
+  for policy_row in
+    select schemaname, tablename, policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices')
+  loop
+    execute format('drop policy if exists %I on %I.%I', policy_row.policyname, policy_row.schemaname, policy_row.tablename);
+  end loop;
+end $$;
 
 alter table public.profiles enable row level security;
 
@@ -81,12 +89,6 @@ alter table public.jobsites enable row level security;
 alter table public.equipment enable row level security;
 alter table public.service_requests enable row level security;
 alter table public.invoices enable row level security;
-
-drop policy if exists "authenticated manage clients" on public.clients;
-drop policy if exists "authenticated manage jobsites" on public.jobsites;
-drop policy if exists "authenticated manage equipment" on public.equipment;
-drop policy if exists "authenticated manage service requests" on public.service_requests;
-drop policy if exists "authenticated manage invoices" on public.invoices;
 
 create policy "authenticated manage clients"
   on public.clients for all
