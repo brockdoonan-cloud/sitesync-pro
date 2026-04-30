@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const PRIORITY_ORDER: Record<string, number> = { emergency: 0, high: 1, normal: 2, low: 3 }
-const SVC_ICONS: Record<string, string> = { swap: '🔄', removal: '🚛', delivery: '📦', pump_out: '💧', emergency: '🚨', inspection: '🔍', other: '📋' }
+const SVC_ICONS: Record<string, string> = { swap: '', removal: '', delivery: '', pump_out: '', emergency: '', inspection: '', other: '' }
 
 const ORLANDO_ZONES: Record<string, { zone: string; color: string; order: number }> = {
   'lake mary': { zone: 'North', color: '#3b82f6', order: 1 },
@@ -89,16 +89,16 @@ export default function RoutesPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">🗻️ Route Optimizer</h1>
+          <h1 className="text-2xl font-bold text-white">Route Optimizer</h1>
           <p className="text-slate-400 mt-1">Cluster jobs by geography, minimize drive time and fuel costs</p>
         </div>
-        <button onClick={load} className="btn-secondary text-sm px-3 py-1.5">↻ Refresh</button>
+        <button onClick={load} className="btn-secondary text-sm px-3 py-1.5"> Refresh</button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {l:'Jobs to Route',v:jobs.length,c:'text-white',bg:'bg-slate-700/40 border-slate-600/40'},
-          {l:'🚨 Emergency',v:emergencyCount,c:emergencyCount>0?'text-red-400':'text-slate-500',bg:emergencyCount>0?'bg-red-500/10 border-red-500/20':'bg-slate-700/40 border-slate-600/40'},
+          {l:' Emergency',v:emergencyCount,c:emergencyCount>0?'text-red-400':'text-slate-500',bg:emergencyCount>0?'bg-red-500/10 border-red-500/20':'bg-slate-700/40 border-slate-600/40'},
           {l:'Trucks Available',v:trucks.length,c:'text-green-400',bg:'bg-green-500/10 border-green-500/20'},
           {l:'Pending Dispatch',v:pendingCount,c:'text-yellow-400',bg:'bg-yellow-500/10 border-yellow-500/20'},
         ].map(s => (
@@ -115,9 +115,9 @@ export default function RoutesPage() {
           <p className="text-slate-400 text-sm mb-6">Automatically groups jobs by geographic zone and optimizes drive order to minimize backtracking</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             {[
-              {step:'1',icon'📍',title:'Zone Grouping',desc:'Clusters jobs by neighborhood — North, South, East, West, Central Orlando zones'},
-              {step:'2',icon:'✡',title:'Priority Sort',desc:'Emergencies always first. Then sorts each zone by service type and customer priority'},
-              {step:'3',icon:'🚛', title:'Truck Assignment',desc:'Balances load across available trucks. Each driver gets an optimized route'},
+              {step:'1',icon'',title:'Zone Grouping',desc:'Clusters jobs by neighborhood  North, South, East, West, Central Orlando zones'},
+              {step:'2',icon:'',title:'Priority Sort',desc:'Emergencies always first. Then sorts each zone by service type and customer priority'},
+              {step:'3',icon:'', title:'Truck Assignment',desc:'Balances load across available trucks. Each driver gets an optimized route'},
             ].map(s => (
               <div key={s.step} className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/30">
                 <div className="flex items-center gap-2 mb-2">
@@ -132,7 +132,7 @@ export default function RoutesPage() {
           {loading ? (
             <div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-14 bg-slate-700/30 rounded-lg animate-pulse"/>)}</div>
           ) : jobs.length === 0 ? (
-            <div className="text-center py-8 text-slate-400"><div className="text-3xl mb-2">✅</div><p>No pending jobs to route — all caught up!</p></div>
+            <div className="text-center py-8 text-slate-400"><div className="text-3xl mb-2"></div><p>No pending jobs to route  all caught up!</p></div>
           ) : (
             <>
               <div className="space-y-2 mb-6 max-h-64 overflow-y-auto">
@@ -140,11 +140,11 @@ export default function RoutesPage() {
                   const zone = getZone(job.jobsite_address || '')
                   return (
                     <div key={job.id} className="flex items-center gap-3 bg-slate-700/30 rounded-lg px-4 py-2.5 border border-slate-600/20">
-                      <span className="text-lg shrink-0">{SVC_ICONS[job.service_type] || '📋'}</span>
+                      <span className="text-lg shrink-0">{SVC_ICONS[job.service_type] || ''}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-white text-sm font-medium">{tl(job.service_type)}</span>
-                          {job.priority === 'emergency' && <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">🚨</span>}
+                          {job.priority === 'emergency' && <span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full"></span>}
                           {job.bin_number && <span className="text-xs text-slate-500 font-mono">#{job.bin_number}</span>}
                         </div>
                         <div className="text-slate-400 text-xs truncate">{job.jobsite_address}</div>
@@ -160,7 +160,7 @@ export default function RoutesPage() {
                 className="w-full py-3.5 rounded-xl font-bold text-white text-lg transition-all bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-60 flex items-center justify-center gap-3">
                 {optimizing ? (
                   <><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.374 0 0 5.373 0 12h4z"/></svg>Optimizing...</>
-                ) : (<>>🗺️ Optimize Routes for {jobs.length} Jobs</>)}
+                ) : (<>> Optimize Routes for {jobs.length} Jobs</>)}
               </button>
             </>
           )}
@@ -169,13 +169,13 @@ export default function RoutesPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center text-green-400">✓</div>
-              <div><h2 className="text-lg font-semibold text-white">Routes Optimized</h2><p className="text-slate-400 text-sm">{routes.length} truck(s) · {routes.reduce((a,r)=>a+r.totalStops,0)} stops · Zone clustered</p></div>
+              <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center text-green-400"></div>
+              <div><h2 className="text-lg font-semibold text-white">Routes Optimized</h2><p className="text-slate-400 text-sm">{routes.length} truck(s)  {routes.reduce((a,r)=>a+r.totalStops,0)} stops  Zone clustered</p></div>
             </div>
             <div className="flex gap-2">
-              <button onClick={()=>{setOptimizeDone(false);setRoutes([])}} className="btn-secondary text-sm px-3 py-1.5">← Re-optimize</button>
+              <button onClick={()=>{setOptimizeDone(false);setRoutes([])}} className="btn-secondary text-sm px-3 py-1.5"> Re-optimize</button>
               <button onClick={dispatchAll} disabled={dispatching||dispatched} className="btn-primary text-sm px-4 py-1.5">
-                {dispatching?'⏳ Dispatching...':dispatched?'✅ Dispatched!':'🚛 Dispatch All Routes'}
+                {dispatching?' Dispatching...':dispatched?' Dispatched!':' Dispatch All Routes'}
               </button>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function RoutesPage() {
             <div key={route.truck.id} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 bg-slate-700/30 border-b border-slate-700/40">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-sky-500/20 rounded-xl flex items-center justify-center text-xl">🚛 </div>
+                  <div className="w-10 h-10 bg-sky-500/20 rounded-xl flex items-center justify-center text-xl"> </div>
                   <div><div className="font-bold text-white">Truck #{route.truck.truck_number}</div><div className="text-slate-400 text-sm">{route.truck.profiles?.full_name || 'Unassigned Driver'}</div></div>
                 </div>
                 <div className="flex gap-4 text-right">
@@ -194,8 +194,8 @@ export default function RoutesPage() {
               </div>
               <div className="p4 space-y-0">
                 <div className="flex items-center gap-4 px-2 py-2">
-                  <div className="w-8 h-8 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center text-green-400">🏭</div>
-                  <div className="text-slate-400 text-sm">Start: Yard / Depot — 7:00 am</div>
+                  <div className="w-8 h-8 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center text-green-400"></div>
+                  <div className="text-slate-400 text-sm">Start: Yard / Depot  7:00 am</div>
                 </div>
                 {route.stops.map((stop:any, si:number) => {
                   const zone = getZone(stop.job.jobsite_address || '')
@@ -211,14 +211,14 @@ export default function RoutesPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <span className="text-base">{SVC_ICONS[stop.job.service_type] || '📋'}</span>
+                              <span className="text-base">{SVC_ICONS[stop.job.service_type] || ''}</span>
                               <span className="font-semibold text-white text-sm">{tl(stop.job.service_type)}</span>
-                              {isEmergency&&<span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">🚨 EMERGENCY</span>}
+                              {isEmergency&&<span className="text-xs bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full"> EMERGENCY</span>}
                               {stop.job.bin_number&&<span className="font-mono text-xs text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">#{stop.job.bin_number}</span>}
                               <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{color:zone.color,backgroundColor:zone.color+20}}>{zone.zone}</span>
                             </div>
                             <div className="text-slate-400 text-xs">{stop.job.jobsite_address}</div>
-                            {stop.job.profiles?.company_name&&<div className="text-slate-500 text-xs mt-0.5">👤 {stop.job.profiles.company_name}</div>}
+                            {stop.job.profiles?.company_name&&<div className="text-slate-500 text-xs mt-0.5"> {stop.job.profiles.company_name}</div>}
                           </div>
                           <div className="text-right shrink-0">
                             <div className="text-white text-sm font-medium">{stop.eta}</div>
@@ -230,12 +230,12 @@ export default function RoutesPage() {
                   )
                 })}
                 <div className="flex items-center gap-4 px-2 py-2">
-                  <div className="w-8 h-8 rounded-full bg-slate-700/60 border-2 border-slate-500 flex items-center justify-center text-slate-400">🏁</div>
-                  <div className="text-slate-400 text-sm">Return to Yard — {route.estimatedTime} total</div>
+                  <div className="w-8 h-8 rounded-full bg-slate-700/60 border-2 border-slate-500 flex items-center justify-center text-slate-400"></div>
+                  <div className="text-slate-400 text-sm">Return to Yard  {route.estimatedTime} total</div>
                 </div>
               </div>
               <div className="px-6 py-3 bg-green-500/5 border-t border-green-500/20 flex items-center gap-2 text-xs text-green-400">
-                <span>💰</span><span>Est. savings vs unoptimized: ~{Math.floor(route.totalStops*8)}% fewer miles · ${(route.totalStops*4.2).toFixed(0)} fuel saved</span>
+                <span></span><span>Est. savings vs unoptimized: ~{Math.floor(route.totalStops*8)}% fewer miles  ${(route.totalStops*4.2).toFixed(0)} fuel saved</span>
               </div>
             </div>
           ))}
