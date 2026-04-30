@@ -31,14 +31,14 @@ export default function OperatorDashboard() {
   }, [supabase])
 
   const navCards = [
-    { href: '/dashboard/operator/jobs', icon: '📋', label: 'Jobs', desc: 'Active service jobs' },
-    { href: '/dashboard/operator/leads', icon: '📬', label: 'Quote Leads', desc: 'New quote requests', highlight: stats.leads > 0 },
-    { href: '/dashboard/operator/equipment', icon: '🗑️', label: 'Equipment', desc: 'Bins and containers' },
-    { href: '/dashboard/operator/map', icon: '🗺️', label: 'Live Map', desc: 'Jobsite locations' },
-    { href: '/dashboard/operator/clients', icon: '👥', label: 'Clients', desc: 'Client accounts' },
-    { href: '/dashboard/operator/requests', icon: '🔧', label: 'Requests', desc: 'Service requests' },
-    { href: '/dashboard/operator/routes', icon: '🚛', label: 'Routes', desc: 'Driver routes' },
-    { href: '/dashboard/operator/billing', icon: '💳', label: 'Billing', desc: 'Invoices and payments' },
+    { href: '/dashboard/operator/jobs', icon: '', label: 'Jobs', desc: 'Active service jobs' },
+    { href: '/dashboard/operator/leads', icon: '', label: 'Quote Leads', desc: 'New quote requests', highlight: stats.leads > 0 },
+    { href: '/dashboard/operator/equipment', icon: '', label: 'Equipment', desc: 'Bins and containers' },
+    { href: '/dashboard/operator/map', icon: '', label: 'Live Map', desc: 'Jobsite locations' },
+    { href: '/dashboard/operator/clients', icon: '', label: 'Clients', desc: 'Client accounts' },
+    { href: '/dashboard/operator/requests', icon: '', label: 'Requests', desc: 'Service requests' },
+    { href: '/dashboard/operator/routes', icon: '', label: 'Routes', desc: 'Driver routes' },
+    { href: '/dashboard/operator/billing', icon: '', label: 'Billing', desc: 'Invoices and payments' },
   ]
 
   return (
