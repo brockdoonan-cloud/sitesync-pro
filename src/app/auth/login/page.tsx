@@ -26,7 +26,7 @@ export default function LoginPage() {
         <div className="card space-y-4">
           {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label><input type="email" className="input" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
-          <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label><input type="password" className="input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
+          <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label><input type="password" className="input" placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
           <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">{loading ? 'Signing in...' : 'Sign In'}</button>
           <p className="text-center text-slate-400 text-sm">Don&apos;t have an account? {' '}<Link href="/auth/signup" className="text-sky-400 hover:text-sky-300 font-medium">Sign up</Link></p>
         </div>
