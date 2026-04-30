@@ -95,11 +95,9 @@ export default function OperatorOnboardingPage() {
     if (!request.address || !request.equipment_type) throw new Error('Add an address and equipment type.')
     const payload = {
       status: request.status,
-      address: request.address,
-      city: request.city,
-      zip: request.zip,
-      equipment_type: request.equipment_type,
-      scheduled_date: request.scheduled_date || null,
+      service_type: request.equipment_type,
+      jobsite_address: [request.address, request.city, request.zip].filter(Boolean).join(', '),
+      preferred_date: request.scheduled_date || null,
       notes: request.notes || null,
     }
     const { error: err } = await supabase.from('service_requests').insert(payload)

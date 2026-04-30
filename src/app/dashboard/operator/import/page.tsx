@@ -226,12 +226,10 @@ export default function BulkImportPage() {
       for (const row of activeRows) {
         const { error: err } = await supabase.from('service_requests').insert({
           status: row.operation === 'delivery' ? 'scheduled' : row.operation,
-          address: row.address,
-          city: 'Florida',
-          zip: '',
-          equipment_type: row.binType,
-          scheduled_date: null,
-          notes: `${row.accountName} - ${row.projectName}${row.comments ? `\n${row.comments}` : ''}`,
+          service_type: row.operation,
+          jobsite_address: row.address,
+          preferred_date: null,
+          notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}${row.comments ? `\n${row.comments}` : ''}`,
         })
         if (err) notes.push(`Service ${row.binNumber}: ${err.message}`)
       }
@@ -260,6 +258,7 @@ export default function BulkImportPage() {
         <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={event => handleFile(event.target.files?.[0])} />
         <div className="text-lg font-semibold text-white">Drop an Excel report here</div>
         <div className="text-sm text-slate-400 mt-2">Supports files like 4.14.2026 Orlando Report.xlsx. Missing addresses get demo Florida jobsites automatically.</div>
+        <div className="text-xs text-slate-500 mt-2">If imports show schema or profiles recursion warnings, run supabase/repair_import_schema.sql once in Supabase SQL Editor.</div>
         {fileName && <div className="text-sky-300 text-sm mt-4">{fileName}</div>}
       </label>
 
