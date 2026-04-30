@@ -204,6 +204,69 @@ function loadGoogleMaps(apiKey: string, cb: () => void) {
   document.head.appendChild(script)
 }
 
+function FallbackEquipmentMap({
+  sites,
+  selected,
+  onSelect,
+}: {
+  sites: MapSite[]
+  selected?: MapSite
+  onSelect: (id: string) => void
+}) {
+  const visibleBinMarkers = sites.flatMap(site => site.equipment.map((item, index) => ({
+    site,
+    item,
+    point: binOverlayPoint(site, index, site.equipment.length),
+  })))
+
+  return (
+    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[size:48px_48px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_72%_70%,rgba(34,197,94,0.12),transparent_30%)]" />
+      <div className="absolute left-[18%] top-[18%] h-[62%] w-[62%] rounded-[42%] border border-slate-600/40 bg-slate-800/35 rotate-12" />
+      <div className="absolute left-[24%] top-[26%] text-xs text-slate-500">DeLand</div>
+      <div className="absolute left-[38%] top-[44%] text-xs text-slate-500">Orlando</div>
+      <div className="absolute left-[18%] top-[70%] text-xs text-slate-500">ChampionsGate</div>
+      <div className="absolute left-[60%] top-[55%] text-xs text-slate-500">Lake Nona</div>
+      <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
+        <div className="text-xs uppercase tracking-wide text-slate-300">Central Florida bin map</div>
+        <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
+        <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Pin positions use stored jobsite lat/lng.</div>
+      </div>
+      {visibleBinMarkers.map(({ site, item, point }) => {
+        const swap = needsSwap(item)
+        const active = selected?.id === site.id
+        return (
+          <button
+            key={`${site.id}-${item.id}`}
+            onClick={() => onSelect(site.id)}
+            className={`absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border-2 shadow-lg transition-all ${active ? 'border-white scale-110' : 'border-slate-950'} ${swap ? 'bg-red-500' : 'bg-green-500'}`}
+            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            title={`Bin #${item.bin_number || item.id.slice(0, 6)} - ${site.address || 'Jobsite'}`}
+          >
+            <span className="block min-w-8 px-1.5 py-1 text-center text-[10px] font-bold leading-none text-white">{markerLabel(item)}</span>
+          </button>
+        )
+      })}
+      <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to inspect bins</div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {sites.slice(0, 8).map(site => (
+            <button
+              key={site.id}
+              onClick={() => onSelect(site.id)}
+              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selected?.id === site.id ? 'border-sky-500/60 bg-sky-500/20 text-white' : 'border-slate-700/60 bg-slate-900/80 text-slate-300 hover:border-slate-500'}`}
+            >
+              <span className="block truncate font-medium">{site.address || 'Jobsite'}</span>
+              <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins - {siteSwapCount(site)} need swap</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function GoogleEquipmentMap({
   sites,
   selected,
@@ -215,11 +278,17 @@ function GoogleEquipmentMap({
 }) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || ''
 
   useEffect(() => {
     if (!apiKey) return
+    setFailed(false)
     loadGoogleMaps(apiKey, () => setReady(Boolean((window as GoogleMapsWindow).google?.maps)))
+    const timeout = window.setTimeout(() => {
+      if (!(window as GoogleMapsWindow).google?.maps) setFailed(true)
+    }, 5000)
+    return () => window.clearTimeout(timeout)
   }, [apiKey])
 
   useEffect(() => {
@@ -293,7 +362,7 @@ function GoogleEquipmentMap({
     }
   }, [onSelect, ready, selected?.id, sites])
 
-  if (!apiKey) return null
+  if (!apiKey || failed) return <FallbackEquipmentMap sites={sites} selected={selected} onSelect={onSelect} />
 
   return (
     <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
@@ -351,11 +420,6 @@ export default function MapPage() {
   const allEquipment = sites.flatMap(site => site.equipment)
   const swapNeeded = allEquipment.filter(needsSwap)
   const hasGoogleMapKey = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY)
-  const visibleBinMarkers = filteredSites.flatMap(site => site.equipment.map((item, index) => ({
-    site,
-    item,
-    point: binOverlayPoint(site, index, site.equipment.length),
-  })))
 
   return (
     <div className="space-y-6">
@@ -402,50 +466,7 @@ export default function MapPage() {
         {hasGoogleMapKey ? (
           <GoogleEquipmentMap sites={filteredSites} selected={selected} onSelect={setSelectedId} />
         ) : (
-          <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[size:48px_48px]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_72%_70%,rgba(34,197,94,0.12),transparent_30%)]" />
-            <div className="absolute left-[18%] top-[18%] h-[62%] w-[62%] rounded-[42%] border border-slate-600/40 bg-slate-800/35 rotate-12" />
-            <div className="absolute left-[24%] top-[26%] text-xs text-slate-500">DeLand</div>
-            <div className="absolute left-[38%] top-[44%] text-xs text-slate-500">Orlando</div>
-            <div className="absolute left-[18%] top-[70%] text-xs text-slate-500">ChampionsGate</div>
-            <div className="absolute left-[60%] top-[55%] text-xs text-slate-500">Lake Nona</div>
-            <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-300">Central Florida bin map</div>
-              <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-              <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Pin positions use stored jobsite lat/lng when available.</div>
-            </div>
-            {visibleBinMarkers.map(({ site, item, point }) => {
-              const swap = needsSwap(item)
-              const active = selected?.id === site.id
-              return (
-                <button
-                  key={`${site.id}-${item.id}`}
-                  onClick={() => setSelectedId(site.id)}
-                  className={`absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border-2 shadow-lg transition-all ${active ? 'border-white scale-110' : 'border-slate-950'} ${swap ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                  title={`Bin #${item.bin_number || item.id.slice(0, 6)} - ${site.address || 'Jobsite'}`}
-                >
-                  <span className="block min-w-8 px-1.5 py-1 text-center text-[10px] font-bold leading-none text-white">{markerLabel(item)}</span>
-                </button>
-              )
-            })}
-            <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to move the map</div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {filteredSites.slice(0, 8).map(site => (
-                  <button
-                    key={site.id}
-                    onClick={() => setSelectedId(site.id)}
-                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selected?.id === site.id ? 'border-sky-500/60 bg-sky-500/20 text-white' : 'border-slate-700/60 bg-slate-900/80 text-slate-300 hover:border-slate-500'}`}
-                  >
-                    <span className="block truncate font-medium">{site.address || 'Jobsite'}</span>
-                    <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins - {siteSwapCount(site)} need swap</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <FallbackEquipmentMap sites={filteredSites} selected={selected} onSelect={setSelectedId} />
         )}
 
         <div className="space-y-4">
