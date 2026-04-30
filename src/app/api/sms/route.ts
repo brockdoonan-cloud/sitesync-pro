@@ -8,7 +8,7 @@ async function sendSMS(to: string, body: string) {
   const fromNumber = process.env.QUO_FROM_NUMBER
 
   if (!apiKey || !fromNumber) {
-    console.warn('[SMS] Quo not configured — add QUO_API_KEY and QUO_FROM_NUMBER to Vercel env')
+    console.warn('[SMS] Quo not configured  add QUO_API_KEY and QUO_FROM_NUMBER to Vercel env')
     return { success: false, reason: 'not_configured' }
   }
 
@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
     const svc = serviceType || 'service'
     const addr = address || 'your location'
     const messages = {
-      confirmation: `Hi ${firstName}! ✅ Your ${svc} request has been confirmed for ${addr}. Reply STOP to opt out. — SiteSync Pro`,
-      eta_update: `Hi ${firstName}! 🚛 Your driver is ${eta || 'on the way'} for your ${svc} at ${addr}. — SiteSync Pro`,
-      completed: `Hi ${firstName}! ✅ Your ${svc} at ${addr} has been completed. Thanks! — SiteSync Pro`,
-      scheduled: `Hi ${firstName}! 📅 Your ${svc} is scheduled for ${eta || 'soon'} at ${addr}. Reply STOP to opt out. — SiteSync Pro`,
+      confirmation: `Hi ${firstName}!  Your ${svc} request has been confirmed for ${addr}. Reply STOP to opt out.  SiteSync Pro`,
+      eta_update: `Hi ${firstName}!  Your driver is ${eta || 'on the way'} for your ${svc} at ${addr}.  SiteSync Pro`,
+      completed: `Hi ${firstName}!  Your ${svc} at ${addr} has been completed. Thanks!  SiteSync Pro`,
+      scheduled: `Hi ${firstName}!  Your ${svc} is scheduled for ${eta || 'soon'} at ${addr}. Reply STOP to opt out.  SiteSync Pro`,
     }
     const message = messages[type]
     if (!message) return NextResponse.json({ error: 'Unknown type' }, { status: 400 })
