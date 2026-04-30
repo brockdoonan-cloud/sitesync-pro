@@ -11,6 +11,7 @@ export default function QuotesPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [zip, setZip] = useState('')
   const [equipmentType, setEquipmentType] = useState('')
@@ -22,11 +23,12 @@ export default function QuotesPage() {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
   const supabase = createClient()
 
   const handleSubmit = async () => {
-    if (!city || !zip || !equipmentType || !jobType) {
-      setError('Please fill in location, equipment type, and job type.')
+    if (!address || !city || !zip || !equipmentType || !jobType) {
+      setError('Please fill in the exact address, location, equipment type, and job type.')
       return
     }
     if (!name || !email) {
@@ -35,14 +37,26 @@ export default function QuotesPage() {
     }
     setLoading(true)
     setError('')
+    const requestNotes = [`Exact address: ${address}`, notes].filter(Boolean).join('\n\n')
     const { error: err } = await supabase.from('quote_requests').insert({
       name, email, phone: phone || null, city, zip,
       equipment_type: equipmentType, dumpster_size: dumpsterSize || null,
       start_date: startDate || null, end_date: endDate || null,
-      job_type: jobType, notes: notes || null, status: 'open',
+      job_type: jobType, notes: requestNotes, status: 'open',
     })
     if (err) { setError(err.message); setLoading(false) }
     else { setSubmitted(true) }
+  }
+
+  const shareQuoteLink = async () => {
+    const url = window.location.origin + '/quotes'
+    if (navigator.share) {
+      await navigator.share({ title: 'SiteSync Pro Quote Request', url })
+      return
+    }
+    await navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2500)
   }
 
   if (submitted) {
@@ -62,8 +76,11 @@ export default function QuotesPage() {
           <p className="text-slate-500 text-sm mb-8">
             Quotes will be sent to <strong className="text-slate-300">{email}</strong>.
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button onClick={() => setSubmitted(false)} className="btn-secondary px-6 py-2.5">Submit Another</button>
+            <button onClick={shareQuoteLink} className="btn-secondary px-6 py-2.5">
+              {linkCopied ? 'Link Copied' : 'Share Quote Link'}
+            </button>
             <Link href="/" className="btn-primary px-6 py-2.5">Back to Home</Link>
           </div>
         </div>
@@ -116,6 +133,10 @@ export default function QuotesPage() {
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
           <h2 className="font-semibold text-white">2. Delivery Location</h2>
           <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">Exact Address *</label>
+              <input type="text" className="input" placeholder="123 Construction Blvd, Orlando, FL" value={address} onChange={e => setAddress(e.target.value)} />
+            </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
               <input type="text" className="input" placeholder="Orlando" value={city} onChange={e => setCity(e.target.value)} />
