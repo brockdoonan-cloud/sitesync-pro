@@ -13,11 +13,11 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
 
   const opLinks = [
     { href: '/dashboard/operator', label: 'Overview' },
-    { href: '/dashboard/operator/routes', label: '🗺️ Routes' },
-    { href: '/dashboard/operator/dispatch', label: '🚛 Dispatch' },
+    { href: '/dashboard/operator/routes', label: ' Routes' },
+    { href: '/dashboard/operator/dispatch', label: ' Dispatch' },
     { href: '/dashboard/operator/requests', label: 'Requests' },
-    { href: '/dashboard/operator/tracker', label: '🗑 Tracker' },
-    { href: '/dashboard/operator/billing', label: '💰 Billing' },
+    { href: '/dashboard/operator/tracker', label: ' Tracker' },
+    { href: '/dashboard/operator/billing', label: ' Billing' },
     { href: '/dashboard/operator/clients', label: 'Clients' },
     { href: '/dashboard/operator/equipment', label: 'Equipment' },
     { href: '/dashboard/operator/trucks', label: 'Trucks' },
@@ -25,7 +25,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   ]
   const custLinks = [
     { href: '/dashboard/customer', label: 'Overview' },
-    { href: '/dashboard/customer/bins', label: '📦 My Bins' },
+    { href: '/dashboard/customer/bins', label: ' My Bins' },
     { href: '/dashboard/customer/request', label: 'Request Service' },
     { href: '/dashboard/customer/tracking', label: 'Track' },
   ]
