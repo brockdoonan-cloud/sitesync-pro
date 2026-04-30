@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 type Jobsite = {
@@ -9,214 +10,281 @@ type Jobsite = {
   lat?: number
   lng?: number
   status?: string
-  client_id?: string
-  created_at: string
 }
 
 type Equipment = {
   id: string
   bin_number?: string
   status?: string
+  location?: string
   jobsite_id?: string
+  last_serviced_at?: string
+}
+
+type MapSite = Jobsite & {
+  equipment: Equipment[]
+  x: number
+  y: number
+}
+
+const DEMO_SITES: MapSite[] = [
+  {
+    id: 'demo-north-yard',
+    name: 'Lake Mary Retail Buildout',
+    address: 'Lake Mary Blvd, Lake Mary, FL',
+    lat: 28.7589,
+    lng: -81.3178,
+    status: 'active',
+    x: 28,
+    y: 24,
+    equipment: [
+      { id: 'demo-401', bin_number: '401', status: 'deployed', location: 'North loading zone', last_serviced_at: '2026-04-27' },
+      { id: 'demo-402', bin_number: '402', status: 'needs_swap', location: 'Framing debris full', last_serviced_at: '2026-04-22' },
+    ],
+  },
+  {
+    id: 'demo-downtown',
+    name: 'Downtown Orlando Remodel',
+    address: 'Central Blvd, Orlando, FL',
+    lat: 28.5421,
+    lng: -81.3790,
+    status: 'active',
+    x: 48,
+    y: 52,
+    equipment: [
+      { id: 'demo-515', bin_number: '515', status: 'full', location: 'Alley dock', last_serviced_at: '2026-04-20' },
+    ],
+  },
+  {
+    id: 'demo-lake-nona',
+    name: 'Lake Nona Medical Pad',
+    address: 'Narcoossee Rd, Orlando, FL',
+    lat: 28.3954,
+    lng: -81.2440,
+    status: 'scheduled',
+    x: 72,
+    y: 70,
+    equipment: [
+      { id: 'demo-633', bin_number: '633', status: 'deployed', location: 'Slab pour washout', last_serviced_at: '2026-04-29' },
+      { id: 'demo-634', bin_number: '634', status: 'available', location: 'Reserved for delivery' },
+    ],
+  },
+]
+
+function needsSwap(item: Equipment) {
+  return ['needs_swap', 'full', 'overflowing', 'swap_needed'].includes((item.status || '').toLowerCase())
+}
+
+function siteSwapCount(site: MapSite) {
+  return site.equipment.filter(needsSwap).length
+}
+
+function statusClass(status?: string) {
+  if (needsSwap({ id: 'status', status })) return 'bg-red-500/10 text-red-400 border-red-500/30'
+  if (status === 'deployed' || status === 'active') return 'bg-green-500/10 text-green-400 border-green-500/30'
+  if (status === 'available' || status === 'scheduled') return 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+  return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
+}
+
+function coordToPoint(site: Jobsite, index: number, total: number) {
+  if (typeof site.lat === 'number' && typeof site.lng === 'number') {
+    const minLat = 28.2
+    const maxLat = 28.9
+    const minLng = -81.65
+    const maxLng = -81.1
+    const x = ((site.lng - minLng) / (maxLng - minLng)) * 80 + 10
+    const y = (1 - ((site.lat - minLat) / (maxLat - minLat))) * 74 + 12
+    return {
+      x: Math.max(8, Math.min(92, x)),
+      y: Math.max(10, Math.min(88, y)),
+    }
+  }
+
+  const angle = (index / Math.max(1, total)) * Math.PI * 2
+  return {
+    x: 50 + Math.cos(angle) * 30,
+    y: 50 + Math.sin(angle) * 24,
+  }
 }
 
 export default function MapPage() {
-  const [jobsites, setJobsites] = useState<Jobsite[]>([])
-  const [equipment, setEquipment] = useState<Equipment[]>([])
-  const [selected, setSelected] = useState<Jobsite | null>(null)
+  const [sites, setSites] = useState<MapSite[]>(DEMO_SITES)
+  const [selectedId, setSelectedId] = useState(DEMO_SITES[0].id)
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const supabase = createClient()
+  const [usingDemo, setUsingDemo] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'swap' | 'ok'>('all')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: js }, { data: eq }] = await Promise.all([
-      supabase.from('jobsites').select('*').order('created_at', { ascending: false }),
-      supabase.from('equipment').select('id, bin_number, status, jobsite_id'),
+    const supabase = createClient()
+    const [{ data: jobsites }, { data: equipment }] = await Promise.all([
+      supabase.from('jobsites').select('id,name,address,lat,lng,status').order('status', { ascending: true }),
+      supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }),
     ])
-    setJobsites(js || [])
-    setEquipment(eq || [])
+
+    if (jobsites && jobsites.length > 0) {
+      const mapped = jobsites.map((site: Jobsite, index: number) => ({
+        ...site,
+        ...coordToPoint(site, index, jobsites.length),
+        equipment: (equipment || []).filter((item: Equipment) => item.jobsite_id === site.id),
+      }))
+      setSites(mapped)
+      setSelectedId(mapped[0]?.id || '')
+      setUsingDemo(false)
+    } else {
+      setSites(DEMO_SITES)
+      setSelectedId(DEMO_SITES[0].id)
+      setUsingDemo(true)
+    }
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { load() }, [load])
 
-  const filtered = jobsites.filter(j =>
-    !search ||
-    (j.address || '').toLowerCase().includes(search.toLowerCase()) ||
-    (j.name || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredSites = useMemo(() => {
+    if (filter === 'swap') return sites.filter(site => siteSwapCount(site) > 0)
+    if (filter === 'ok') return sites.filter(site => siteSwapCount(site) === 0)
+    return sites
+  }, [filter, sites])
 
-  const statusColor: Record<string, string> = {
-    active:    'bg-green-500/20 text-green-400 border-green-500/30',
-    inactive:  'bg-slate-700/40 text-slate-400 border-slate-600/40',
-    scheduled: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
-    completed: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  }
-
-  const statusDot: Record<string, string> = {
-    active:    'bg-green-400',
-    inactive:  'bg-slate-500',
-    scheduled: 'bg-sky-400',
-    completed: 'bg-purple-400',
-  }
-
-  const binsAt = (jobsiteId: string) => equipment.filter(e => e.jobsite_id === jobsiteId)
-  const deployedCount = equipment.filter(e => e.status === 'deployed').length
-  const activeCount = jobsites.filter(j => j.status === 'active').length
+  const selected = sites.find(site => site.id === selectedId) || filteredSites[0] || sites[0]
+  const allEquipment = sites.flatMap(site => site.equipment)
+  const swapNeeded = allEquipment.filter(needsSwap)
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Live Map</h1>
-          <p className="text-slate-400 mt-1">Jobsite locations and deployed equipment</p>
+          <h1 className="text-2xl font-bold text-white">Equipment Map</h1>
+          <p className="text-slate-400 mt-1">See deployed equipment by jobsite and identify bins that need swaps.</p>
         </div>
-        <button onClick={load} className="btn-secondary text-sm px-4 py-2">
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          {(['all', 'swap', 'ok'] as const).map(option => (
+            <button
+              key={option}
+              onClick={() => setFilter(option)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${filter === option ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' : 'text-slate-400 border-slate-700/50 hover:text-white'}`}
+            >
+              {option === 'all' ? 'All Sites' : option === 'swap' ? 'Needs Swap' : 'No Swap'}
+            </button>
+          ))}
+          <button onClick={load} className="btn-secondary text-sm px-4 py-2">Refresh</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {usingDemo && (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-300">
+          Demo mode is showing sample Orlando jobsites because live jobsite rows were not returned. Real Supabase data will replace this automatically.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Total Jobsites', value: jobsites.length, color: 'text-white' },
-          { label: 'Active Sites', value: activeCount, color: 'text-green-400' },
-          { label: 'Bins Deployed', value: deployedCount, color: 'text-sky-400' },
-          { label: 'Bins Available', value: equipment.filter(e => e.status === 'available').length, color: 'text-slate-400' },
-        ].map(s => (
-          <div key={s.label} className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
-            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-slate-500 text-xs mt-0.5">{s.label}</div>
+          { label: 'Jobsites', value: sites.length, className: 'bg-slate-700/40 text-white border-slate-600/40' },
+          { label: 'Equipment On Sites', value: allEquipment.length, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
+          { label: 'Needs Swap', value: swapNeeded.length, className: 'bg-red-500/10 text-red-400 border-red-500/20' },
+          { label: 'Okay For Now', value: Math.max(0, allEquipment.length - swapNeeded.length), className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+        ].map(stat => (
+          <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.className}`}>
+            <div className="text-2xl font-bold">{stat.value}</div>
+            <div className="text-slate-500 text-xs mt-0.5">{stat.label}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 space-y-3">
-          <input
-            type="text"
-            className="input text-sm py-2"
-            placeholder="Search jobsites..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {loading ? (
-            <div className="space-y-2">
-              {[1,2,3,4].map(i => <div key={i} className="h-16 bg-slate-800/40 rounded-xl animate-pulse" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-6 text-center">
-              <p className="text-slate-400 text-sm">No jobsites found</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-              {filtered.map(site => {
-                const bins = binsAt(site.id)
-                const sc = statusColor[site.status || 'inactive']
-                const dot = statusDot[site.status || 'inactive']
-                return (
-                  <div
-                    key={site.id}
-                    onClick={() => setSelected(site)}
-                    className={`bg-slate-800/60 border rounded-xl px-4 py-3 cursor-pointer transition-colors ${selected?.id === site.id ? 'border-sky-500/50 bg-sky-500/5' : 'border-slate-700/50 hover:border-slate-600'}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-                          <span className="font-medium text-white text-sm truncate">
-                            {site.name || site.address || 'Unnamed Site'}
-                          </span>
-                        </div>
-                        {site.address && site.name && (
-                          <p className="text-slate-500 text-xs truncate pl-4">{site.address}</p>
-                        )}
-                        {bins.length > 0 && (
-                          <p className="text-sky-400 text-xs pl-4 mt-1">{bins.length} bin{bins.length !== 1 ? 's' : ''} on site</p>
-                        )}
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${sc}`}>
-                        {site.status || 'inactive'}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/80 to-transparent" />
+          <div className="absolute left-4 top-4 z-10">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Orlando service area</div>
+            <div className="text-lg font-semibold text-white">Live Equipment Map</div>
+          </div>
+          {filteredSites.map(site => {
+            const count = siteSwapCount(site)
+            const selectedPin = selected?.id === site.id
+            return (
+              <button
+                key={site.id}
+                onClick={() => setSelectedId(site.id)}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full border-2 shadow-lg transition-all ${selectedPin ? 'h-12 w-12 border-white scale-110' : 'h-9 w-9 border-slate-950'} ${count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                style={{ left: `${site.x}%`, top: `${site.y}%` }}
+                title={site.name || site.address || 'Jobsite'}
+              >
+                <span className="text-xs font-bold text-white">{site.equipment.length}</span>
+              </button>
+            )
+          })}
+          <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Green pins: equipment okay</div>
+            <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Red pins: one or more swaps needed</div>
+          </div>
         </div>
 
-        <div className="lg:col-span-2">
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden">
-            {selected ? (
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="font-bold text-white text-lg">{selected.name || 'Jobsite'}</h3>
-                    <p className="text-slate-400 text-sm mt-1">{selected.address || 'No address on file'}</p>
-                  </div>
-                  <button onClick={() => setSelected(null)} className="text-slate-500 hover:text-white p-1">x</button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-slate-700/40 rounded-xl p-3">
-                    <div className="text-slate-500 text-xs mb-1">Status</div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${statusColor[selected.status || 'inactive']}`}>
-                      {selected.status || 'inactive'}
-                    </span>
-                  </div>
-                  <div className="bg-slate-700/40 rounded-xl p-3">
-                    <div className="text-slate-500 text-xs mb-1">Equipment</div>
-                    <div className="text-white font-semibold">{binsAt(selected.id).length} bins</div>
-                  </div>
-                </div>
-
-                {selected.address ? (
-                  <div className="rounded-xl overflow-hidden border border-slate-700/50 h-64">
-                    <iframe
-                      title="map"
-                      width="100%"
-                      height="256"
-                      style={{ border: 0 }}
-                      loading="lazy"
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(selected.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-slate-700/50 h-64 bg-slate-900 flex flex-col items-center justify-center gap-3">
-                    <p className="text-slate-500 text-sm">No address on file for this site</p>
-                  </div>
-                )}
-
-                {binsAt(selected.id).length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2">Equipment at this site</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {binsAt(selected.id).map(bin => (
-                        <div key={bin.id} className="bg-slate-700/40 rounded-lg px-3 py-2 text-xs">
-                          <div className="text-white font-medium">Bin #{bin.bin_number || bin.id.slice(0,6)}</div>
-                          <div className="text-sky-400 mt-0.5">{bin.status}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{selected?.name || 'Select a jobsite'}</h2>
+                <p className="text-slate-400 text-sm mt-1">{selected?.address || 'No address on file'}</p>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-96 gap-4">
-                <svg className="w-16 h-16 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <div className="text-center">
-                  <p className="text-slate-400 font-medium">Select a jobsite</p>
-                  <p className="text-slate-600 text-sm mt-1">Click any site from the list to view its location and deployed equipment</p>
+              {selected && <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(selected.status)}`}>{selected.status || 'unknown'}</span>}
+            </div>
+            {selected && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-700/40 p-3">
+                  <div className="text-slate-500 text-xs">On Site</div>
+                  <div className="text-white text-2xl font-bold">{selected.equipment.length}</div>
+                </div>
+                <div className="rounded-xl bg-red-500/10 p-3">
+                  <div className="text-slate-500 text-xs">Needs Swap</div>
+                  <div className="text-red-400 text-2xl font-bold">{siteSwapCount(selected)}</div>
                 </div>
               </div>
             )}
           </div>
+
+          <div className="card">
+            <h3 className="font-semibold text-white mb-3">Equipment at selected site</h3>
+            {selected?.equipment.length ? (
+              <div className="space-y-2">
+                {selected.equipment.map(item => (
+                  <div key={item.id} className="rounded-lg border border-slate-700/50 bg-slate-700/20 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-white">Bin #{item.bin_number || item.id.slice(0, 6)}</div>
+                        <div className="text-xs text-slate-500">{item.location || selected.address || 'On site'}</div>
+                      </div>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(item.status)}`}>{needsSwap(item) ? 'Swap needed' : item.status || 'unknown'}</span>
+                    </div>
+                    {item.last_serviced_at && <div className="text-xs text-slate-500 mt-2">Last serviced {new Date(item.last_serviced_at).toLocaleDateString()}</div>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm">No equipment linked to this site yet.</p>
+            )}
+          </div>
+
+          <div className="card">
+            <h3 className="font-semibold text-white mb-3">Swap queue</h3>
+            {swapNeeded.length > 0 ? (
+              <div className="space-y-2">
+                {sites.flatMap(site => site.equipment.filter(needsSwap).map(item => ({ site, item }))).map(({ site, item }) => (
+                  <button key={item.id} onClick={() => setSelectedId(site.id)} className="w-full text-left rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 hover:border-red-500/40 transition-colors">
+                    <div className="text-sm font-medium text-white">Bin #{item.bin_number || item.id.slice(0, 6)}</div>
+                    <div className="text-xs text-red-300">{site.name || site.address || 'Jobsite'} needs swap</div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm">No swaps needed in the current view.</p>
+            )}
+          </div>
         </div>
       </div>
+
+      {loading && <p className="text-slate-500 text-sm">Refreshing map data...</p>}
     </div>
   )
 }

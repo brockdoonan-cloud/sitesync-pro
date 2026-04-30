@@ -1,5 +1,4 @@
-'use client'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import UpdateRequestStatus from '@/components/UpdateRequestStatus'
 
 export default async function OperatorRequestsPage() {

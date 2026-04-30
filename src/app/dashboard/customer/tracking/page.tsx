@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -47,20 +48,21 @@ function requestDate(request: ServiceRequest) {
 }
 
 function mapUrl(address: string) {
-  return 'https://www.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed'
+  return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`
 }
 
 function ProgressTracker({ status }: { status: string }) {
   const normalized = normalizeStatus(status)
   const currentIndex = Math.max(0, statusSteps.findIndex(step => step.key === normalized))
+
   return (
     <div className="grid grid-cols-4 gap-2">
       {statusSteps.map((step, index) => {
         const isDone = index <= currentIndex
         return (
           <div key={step.key} className="space-y-2">
-            <div className={'h-2 rounded-full ' + (isDone ? 'bg-sky-400' : 'bg-slate-700')} />
-            <div className={'text-xs font-medium ' + (isDone ? 'text-white' : 'text-slate-500')}>{step.label}</div>
+            <div className={`h-2 rounded-full ${isDone ? 'bg-sky-400' : 'bg-slate-700'}`} />
+            <div className={`text-xs font-medium ${isDone ? 'text-white' : 'text-slate-500'}`}>{step.label}</div>
           </div>
         )
       })}
@@ -76,22 +78,31 @@ export default function TrackingPage() {
 
   useEffect(() => {
     let isMounted = true
+
     async function loadRequests() {
       setLoading(true)
       setError('')
+
       const supabase = createClient()
       const { data: { user }, error: userError } = await supabase.auth.getUser()
+
       if (userError || !user) {
-        if (isMounted) { setError('Please sign in to view live tracking.'); setLoading(false) }
+        if (isMounted) {
+          setError('Please sign in to view live tracking.')
+          setLoading(false)
+        }
         return
       }
+
       const { data, error: requestError } = await supabase
         .from('service_requests')
         .select('*')
         .eq('customer_id', user.id)
         .in('status', activeStatuses)
         .order('created_at', { ascending: false })
+
       if (!isMounted) return
+
       if (requestError) {
         setError(requestError.message)
         setRequests([])
@@ -100,10 +111,15 @@ export default function TrackingPage() {
         setRequests(rows)
         setSelectedId(rows[0]?.id ?? null)
       }
+
       setLoading(false)
     }
+
     loadRequests()
-    return () => { isMounted = false }
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const selectedRequest = useMemo(
@@ -144,12 +160,17 @@ export default function TrackingPage() {
               const address = requestAddress(request)
               const status = normalizeStatus(request.status)
               const isSelected = request.id === selectedRequest?.id
+
               return (
                 <button
                   key={request.id}
                   type="button"
                   onClick={() => setSelectedId(request.id)}
-                  className={'w-full rounded-lg border p-4 text-left transition ' + (isSelected ? 'border-sky-400 bg-sky-500/10' : 'border-slate-700/50 bg-slate-800/40 hover:border-slate-500')}
+                  className={`w-full rounded-lg border p-4 text-left transition ${
+                    isSelected
+                      ? 'border-sky-400 bg-sky-500/10'
+                      : 'border-slate-700/50 bg-slate-800/40 hover:border-slate-500'
+                  }`}
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -162,12 +183,14 @@ export default function TrackingPage() {
                       {titleize(status)}
                     </span>
                   </div>
+
+                  <div className="mt-4">
+                    <ProgressTracker status={status} />
+                  </div>
+
                   <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
                     <div>Scheduled: <span className="text-slate-200">{requestDate(request)}</span></div>
                     {request.notes && <div>Notes: <span className="text-slate-200">{request.notes}</span></div>}
-                  </div>
-                  <div className="mt-4">
-                    <ProgressTracker status={status} />
                   </div>
                 </button>
               )
