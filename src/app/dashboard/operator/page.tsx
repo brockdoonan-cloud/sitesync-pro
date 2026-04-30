@@ -1,52 +1,79 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
-export default async function OperatorDashboard() {
+export default function OperatorDashboard() {
+  const [stats, setStats] = useState({ jobs: 0, deployed: 0, available: 0, leads: 0, clients: 0 })
+  const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  const [
-    { count: pendingCount },
-    { count: jobsToday },
-    { count: equipmentCount },
-    { data: recentRequests },
-  ] = await Promise.all([
-    supabase.from('service_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('jobs').select('*', { count: 'exact', head: true }).gte('scheduled_date', new Date().toISOString().split('T')[0]),
-    supabase.from('equipment').select('*', { count: 'exact', head: true }).eq('status', 'deployed'),
-    supabase.from('service_requests').select('*, profiles(full_name, company_name)').order('created_at', { ascending: false }).limit(5),
-  ])
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const [jobs, equipment, leads, clients] = await Promise.all([
+        supabase.from('jobs').select('id', { count: 'exact', head: true }),
+        supabase.from('equipment').select('id, status'),
+        supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+        supabase.from('clients').select('id', { count: 'exact', head: true }),
+      ])
+      const eq = equipment.data || []
+      setStats({
+        jobs: jobs.count || 0,
+        deployed: eq.filter(e => e.status === 'deployed').length,
+        available: eq.filter(e => e.status === 'available').length,
+        leads: leads.count || 0,
+        clients: clients.count || 0,
+      })
+      setLoading(false)
+    }
+    load()
+  }, [supabase])
+
+  const navCards = [
+    { href: '/dashboard/operator/jobs', icon: '📋', label: 'Jobs', desc: 'Active service jobs' },
+    { href: '/dashboard/operator/leads', icon: '📬', label: 'Quote Leads', desc: 'New quote requests', highlight: stats.leads > 0 },
+    { href: '/dashboard/operator/equipment', icon: '🗑️', label: 'Equipment', desc: 'Bins and containers' },
+    { href: '/dashboard/operator/map', icon: '🗺️', label: 'Live Map', desc: 'Jobsite locations' },
+    { href: '/dashboard/operator/clients', icon: '👥', label: 'Clients', desc: 'Client accounts' },
+    { href: '/dashboard/operator/requests', icon: '🔧', label: 'Requests', desc: 'Service requests' },
+    { href: '/dashboard/operator/routes', icon: '🚛', label: 'Routes', desc: 'Driver routes' },
+    { href: '/dashboard/operator/billing', icon: '💳', label: 'Billing', desc: 'Invoices and payments' },
+  ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Operator Dashboard</h1>
-        <p className="text-slate-400 mt-1">Manage service requests and equipment across all job sites</p>
+        <p className="text-slate-400 mt-1">Operations overview</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Pending Requests', value: pendingCount ?? 0, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
-          { label: 'Jobs Today', value: jobsToday ?? 0, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-          { label: 'Active Equipment', value: equipmentCount ?? 0, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
+          { label: 'Active Jobs', value: loading ? '-' : String(stats.jobs), color: 'text-white' },
+          { label: 'New Leads', value: loading ? '-' : String(stats.leads), color: stats.leads > 0 ? 'text-sky-400' : 'text-white' },
+          { label: 'Bins Deployed', value: loading ? '-' : String(stats.deployed), color: 'text-green-400' },
+          { label: 'Bins Available', value: loading ? '-' : String(stats.available), color: 'text-slate-400' },
         ].map(s => (
-          <div key={s.label} className={`card border ${s.bg}`}>
-            <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-slate-400 text-sm mt-1">{s.label}</div>
+          <div key={s.label} className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+            <div className={'text-2xl font-bold ' + s.color}>{s.value}</div>
+            <div className="text-slate-500 text-xs mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
-      <div className="card">
-        <h2 className="text-lg font-semibold text-white mb-4">Recent Service Requests</h2>
-        {recentRequests && recentRequests.length > 0 ? (
-          <div className="space-y-3">
-            {recentRequests.map((req: any) => (
-              <div key={req.id} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg">
-                <div><div className="text-white font-medium text-sm">{req.service_type?.replace(/_/g,' ').replace(/\b\w/g,(c:string)=>c.toUpperCase())}</div><div className="text-slate-400 text-xs mt-0.5">{req.profiles?.company_name??req.profiles?.full_name} � {req.jobsite_address}</div></div>
-                <span className={`badge-${req.status}`}>{req.status}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-400 text-sm">No service requests yet.</p>
-        )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {navCards.map(card => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className={'block bg-slate-800/40 border rounded-xl p-4 hover:border-sky-500/40 hover:bg-sky-500/5 transition-all group ' + (card.highlight ? 'border-sky-500/40 bg-sky-500/5' : 'border-slate-700/50')}
+          >
+            <div className="text-3xl mb-3">{card.icon}</div>
+            <div className="font-semibold text-white group-hover:text-sky-300 transition-colors">{card.label}</div>
+            <div className="text-slate-500 text-xs mt-1">{card.desc}</div>
+          </Link>
+        ))}
       </div>
     </div>
   )
