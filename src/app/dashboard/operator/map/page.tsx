@@ -109,7 +109,8 @@ function normalizeAddress(address?: string) {
   return (address || '').trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
-function knownPosition(site: Jobsite): GoogleLatLng | null {
+function knownPosition(site?: Jobsite): GoogleLatLng | null {
+  if (!site) return null
   if (typeof site.lat === 'number' && typeof site.lng === 'number') return { lat: site.lat, lng: site.lng }
   return KNOWN_ADDRESS_COORDS[normalizeAddress(site.address)] || null
 }
@@ -137,6 +138,26 @@ function binOverlayPoint(site: MapSite, index: number, total: number) {
     x: Math.max(4, Math.min(96, site.x + Math.cos(angle) * radius)),
     y: Math.max(6, Math.min(94, site.y + Math.sin(angle) * radius)),
   }
+}
+
+const TILE_SIZE = 256
+const DEFAULT_CENTER = { lat: 28.5384, lng: -81.3789 }
+
+function projectLatLng(position: GoogleLatLng, zoom: number) {
+  const scale = TILE_SIZE * 2 ** zoom
+  const sinLat = Math.sin((Math.max(-85.0511, Math.min(85.0511, position.lat)) * Math.PI) / 180)
+  return {
+    x: ((position.lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  }
+}
+
+function unprojectLatLng(point: { x: number; y: number }, zoom: number): GoogleLatLng {
+  const scale = TILE_SIZE * 2 ** zoom
+  const lng = (point.x / scale) * 360 - 180
+  const n = Math.PI - (2 * Math.PI * point.y) / scale
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+  return { lat, lng }
 }
 
 function coordToPoint(site: Jobsite, index: number, total: number) {
@@ -213,41 +234,122 @@ function FallbackEquipmentMap({
   selected?: MapSite
   onSelect: (id: string) => void
 }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState(10)
+  const [size, setSize] = useState({ width: 900, height: 560 })
+  const [center, setCenter] = useState<GoogleLatLng>(knownPosition(selected || sites[0]) || DEFAULT_CENTER)
   const visibleBinMarkers = sites.flatMap(site => site.equipment.map((item, index) => ({
     site,
     item,
-    point: binOverlayPoint(site, index, site.equipment.length),
+    position: binMarkerPosition(knownPosition(site) || DEFAULT_CENTER, index, site.equipment.length),
   })))
+  const centerWorld = projectLatLng(center, zoom)
+  const tileMinX = Math.floor((centerWorld.x - size.width / 2) / TILE_SIZE) - 1
+  const tileMaxX = Math.floor((centerWorld.x + size.width / 2) / TILE_SIZE) + 1
+  const tileMinY = Math.floor((centerWorld.y - size.height / 2) / TILE_SIZE) - 1
+  const tileMaxY = Math.floor((centerWorld.y + size.height / 2) / TILE_SIZE) + 1
+  const tileCount = 2 ** zoom
+  const tiles: { key: string; src: string; left: number; top: number }[] = []
+
+  for (let x = tileMinX; x <= tileMaxX; x++) {
+    for (let y = tileMinY; y <= tileMaxY; y++) {
+      if (y < 0 || y >= tileCount) continue
+      const wrappedX = ((x % tileCount) + tileCount) % tileCount
+      tiles.push({
+        key: `${zoom}-${x}-${y}`,
+        src: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
+        left: x * TILE_SIZE - centerWorld.x + size.width / 2,
+        top: y * TILE_SIZE - centerWorld.y + size.height / 2,
+      })
+    }
+  }
+
+  useEffect(() => {
+    const node = mapRef.current
+    if (!node) return
+    const update = () => setSize({ width: node.clientWidth || 900, height: node.clientHeight || 560 })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const next = knownPosition(selected)
+    if (next) setCenter(next)
+  }, [selected])
+
+  const panBy = (dx: number, dy: number) => {
+    const world = projectLatLng(center, zoom)
+    setCenter(unprojectLatLng({ x: world.x + dx, y: world.y + dy }, zoom))
+  }
+
+  const zoomBy = (amount: number) => setZoom(value => Math.max(7, Math.min(16, value + amount)))
 
   return (
-    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[size:48px_48px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_72%_70%,rgba(34,197,94,0.12),transparent_30%)]" />
-      <div className="absolute left-[18%] top-[18%] h-[62%] w-[62%] rounded-[42%] border border-slate-600/40 bg-slate-800/35 rotate-12" />
-      <div className="absolute left-[24%] top-[26%] text-xs text-slate-500">DeLand</div>
-      <div className="absolute left-[38%] top-[44%] text-xs text-slate-500">Orlando</div>
-      <div className="absolute left-[18%] top-[70%] text-xs text-slate-500">ChampionsGate</div>
-      <div className="absolute left-[60%] top-[55%] text-xs text-slate-500">Lake Nona</div>
+    <div
+      ref={mapRef}
+      onWheel={event => {
+        event.preventDefault()
+        zoomBy(event.deltaY < 0 ? 1 : -1)
+      }}
+      className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative"
+    >
+      {tiles.map(tile => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={tile.key}
+          src={tile.src}
+          alt=""
+          className="absolute h-64 w-64 select-none"
+          draggable={false}
+          style={{ left: tile.left, top: tile.top }}
+        />
+      ))}
+      <div className="absolute inset-0 bg-slate-950/5" />
       <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-        <div className="text-xs uppercase tracking-wide text-slate-300">Central Florida bin map</div>
+        <div className="text-xs uppercase tracking-wide text-slate-300">OpenStreetMap bin map</div>
         <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-        <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Pin positions use stored jobsite lat/lng.</div>
+        <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Wheel or use controls to zoom.</div>
       </div>
-      {visibleBinMarkers.map(({ site, item, point }) => {
+      <div className="absolute right-4 top-4 z-20 grid gap-1">
+        <button onClick={() => zoomBy(1)} className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/90 text-white text-lg font-bold">+</button>
+        <button onClick={() => zoomBy(-1)} className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/90 text-white text-lg font-bold">-</button>
+      </div>
+      <div className="absolute right-4 top-28 z-20 grid grid-cols-3 gap-1">
+        <span />
+        <button onClick={() => panBy(0, -160)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">N</button>
+        <span />
+        <button onClick={() => panBy(-160, 0)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">W</button>
+        <button onClick={() => setCenter(DEFAULT_CENTER)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">FL</button>
+        <button onClick={() => panBy(160, 0)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">E</button>
+        <span />
+        <button onClick={() => panBy(0, 160)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">S</button>
+        <span />
+      </div>
+      {visibleBinMarkers.map(({ site, item, position }) => {
         const swap = needsSwap(item)
         const active = selected?.id === site.id
+        const world = projectLatLng(position, zoom)
+        const left = size.width / 2 + world.x - centerWorld.x
+        const top = size.height / 2 + world.y - centerWorld.y
+        if (left < -40 || left > size.width + 40 || top < -40 || top > size.height + 40) return null
         return (
           <button
             key={`${site.id}-${item.id}`}
-            onClick={() => onSelect(site.id)}
+            onClick={() => {
+              onSelect(site.id)
+              setCenter(knownPosition(site) || position)
+            }}
             className={`absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border-2 shadow-lg transition-all ${active ? 'border-white scale-110' : 'border-slate-950'} ${swap ? 'bg-red-500' : 'bg-green-500'}`}
-            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            style={{ left, top }}
             title={`Bin #${item.bin_number || item.id.slice(0, 6)} - ${site.address || 'Jobsite'}`}
           >
             <span className="block min-w-8 px-1.5 py-1 text-center text-[10px] font-bold leading-none text-white">{markerLabel(item)}</span>
           </button>
         )
       })}
+      <div className="absolute bottom-2 right-3 z-10 rounded bg-white/80 px-2 py-0.5 text-[10px] text-slate-700">(c) OpenStreetMap</div>
       <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to inspect bins</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
