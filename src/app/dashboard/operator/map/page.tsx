@@ -102,6 +102,16 @@ function markerLabel(item: Equipment) {
   return value.length > 4 ? value.slice(-4) : value
 }
 
+function binOverlayPoint(site: MapSite, index: number, total: number) {
+  if (total <= 1) return { x: site.x, y: site.y }
+  const angle = (index / total) * Math.PI * 2
+  const radius = 1.8 + Math.min(total, 12) * 0.12
+  return {
+    x: Math.max(4, Math.min(96, site.x + Math.cos(angle) * radius)),
+    y: Math.max(6, Math.min(94, site.y + Math.sin(angle) * radius)),
+  }
+}
+
 function coordToPoint(site: Jobsite, index: number, total: number) {
   if (typeof site.lat === 'number' && typeof site.lng === 'number') {
     const minLat = 28.2
@@ -312,6 +322,11 @@ export default function MapPage() {
   const allEquipment = sites.flatMap(site => site.equipment)
   const swapNeeded = allEquipment.filter(needsSwap)
   const hasGoogleMapKey = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY)
+  const visibleBinMarkers = filteredSites.flatMap(site => site.equipment.map((item, index) => ({
+    site,
+    item,
+    point: binOverlayPoint(site, index, site.equipment.length),
+  })))
 
   return (
     <div className="space-y-6">
@@ -360,17 +375,33 @@ export default function MapPage() {
         ) : (
           <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
             <iframe
-              title="Selected jobsite Google map"
-              src={googleEmbedUrl(selected)}
-              className="absolute inset-0 h-full w-full border-0"
+              title="Orlando equipment Google map"
+              src={googleEmbedUrl()}
+              className="absolute inset-0 h-full w-full border-0 opacity-90"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
+            <div className="absolute inset-0 bg-slate-950/10" />
             <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-300">Selected jobsite Google map</div>
-              <div className="text-lg font-semibold text-white">{selected?.address || 'Orlando service area'}</div>
-              <div className="text-xs text-slate-300 mt-1">Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show every bin as its own interactive Google pin.</div>
+              <div className="text-xs uppercase tracking-wide text-slate-300">Bin location overlay</div>
+              <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
+              <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Add the Google Maps API key for exact geocoded marker placement.</div>
             </div>
+            {visibleBinMarkers.map(({ site, item, point }) => {
+              const swap = needsSwap(item)
+              const active = selected?.id === site.id
+              return (
+                <button
+                  key={`${site.id}-${item.id}`}
+                  onClick={() => setSelectedId(site.id)}
+                  className={`absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border-2 shadow-lg transition-all ${active ? 'border-white scale-110' : 'border-slate-950'} ${swap ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  title={`Bin #${item.bin_number || item.id.slice(0, 6)} - ${site.address || 'Jobsite'}`}
+                >
+                  <span className="block min-w-8 px-1.5 py-1 text-center text-[10px] font-bold leading-none text-white">{markerLabel(item)}</span>
+                </button>
+              )
+            })}
             <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to move the map</div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
