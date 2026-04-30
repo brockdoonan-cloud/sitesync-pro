@@ -238,6 +238,8 @@ function FallbackEquipmentMap({
   const [zoom, setZoom] = useState(10)
   const [size, setSize] = useState({ width: 900, height: 560 })
   const [center, setCenter] = useState<GoogleLatLng>(knownPosition(selected || sites[0]) || DEFAULT_CENTER)
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef<{ x: number; y: number; world: { x: number; y: number } } | null>(null)
   const visibleBinMarkers = sites.flatMap(site => site.equipment.map((item, index) => ({
     site,
     item,
@@ -285,15 +287,39 @@ function FallbackEquipmentMap({
   }
 
   const zoomBy = (amount: number) => setZoom(value => Math.max(7, Math.min(16, value + amount)))
+  const stopDrag = () => {
+    dragStart.current = null
+    setDragging(false)
+  }
 
   return (
     <div
       ref={mapRef}
+      onPointerDown={event => {
+        if (event.target instanceof Element && event.target.closest('button')) return
+        event.preventDefault()
+        event.currentTarget.setPointerCapture(event.pointerId)
+        dragStart.current = { x: event.clientX, y: event.clientY, world: projectLatLng(center, zoom) }
+        setDragging(true)
+      }}
+      onPointerMove={event => {
+        if (!dragStart.current) return
+        event.preventDefault()
+        const dx = event.clientX - dragStart.current.x
+        const dy = event.clientY - dragStart.current.y
+        setCenter(unprojectLatLng({ x: dragStart.current.world.x - dx, y: dragStart.current.world.y - dy }, zoom))
+      }}
+      onPointerUp={event => {
+        if (dragStart.current) event.currentTarget.releasePointerCapture(event.pointerId)
+        stopDrag()
+      }}
+      onPointerCancel={stopDrag}
+      onPointerLeave={stopDrag}
       onWheel={event => {
         event.preventDefault()
         zoomBy(event.deltaY < 0 ? 1 : -1)
       }}
-      className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative"
+      className={`xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative touch-none select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
     >
       {tiles.map(tile => (
         // eslint-disable-next-line @next/next/no-img-element
@@ -310,7 +336,7 @@ function FallbackEquipmentMap({
       <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
         <div className="text-xs uppercase tracking-wide text-slate-300">OpenStreetMap bin map</div>
         <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-        <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Wheel or use controls to zoom.</div>
+        <div className="text-xs text-slate-300 mt-1">Drag to pan. Wheel or use controls to zoom. Red pins need swap.</div>
       </div>
       <div className="absolute right-4 top-4 z-20 grid gap-1">
         <button onClick={() => zoomBy(1)} className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/90 text-white text-lg font-bold">+</button>
