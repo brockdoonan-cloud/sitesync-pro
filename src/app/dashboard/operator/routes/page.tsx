@@ -70,7 +70,7 @@ export default function RoutesPage() {
         </div>
       ) : todayJobs.length === 0 ? (
         <div className="card text-center py-12">
-          <div className="text-4xl mb-3">📅</div>
+          <div className="text-4xl mb-3"></div>
           <h3 className="font-semibold text-white mb-2">No stops for {date}</h3>
           <p className="text-slate-400 text-sm">Select a different date or add scheduled jobs.</p>
         </div>
