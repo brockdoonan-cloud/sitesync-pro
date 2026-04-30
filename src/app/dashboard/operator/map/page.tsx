@@ -87,6 +87,21 @@ function googleEmbedUrl(site?: MapSite) {
   return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
 }
 
+function binMarkerPosition(position: GoogleLatLng, index: number, total: number) {
+  if (total <= 1) return position
+  const angle = (index / total) * Math.PI * 2
+  const radius = 0.00045 + Math.min(total, 12) * 0.00004
+  return {
+    lat: position.lat + Math.sin(angle) * radius,
+    lng: position.lng + Math.cos(angle) * radius,
+  }
+}
+
+function markerLabel(item: Equipment) {
+  const value = item.bin_number || item.id.slice(0, 6)
+  return value.length > 4 ? value.slice(-4) : value
+}
+
 function coordToPoint(site: Jobsite, index: number, total: number) {
   if (typeof site.lat === 'number' && typeof site.lng === 'number') {
     const minLat = 28.2
@@ -201,30 +216,34 @@ function GoogleEquipmentMap({
       for (const site of sites) {
         const position = await positionFor(site)
         if (cancelled || !position) continue
-        const swapCount = siteSwapCount(site)
-        const marker = new google.maps.Marker({
-          map,
-          position,
-          title: site.address || 'Jobsite',
-          label: { text: String(site.equipment.length), color: '#ffffff', fontWeight: '700' },
-          icon: {
-            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-            fillColor: swapCount > 0 ? '#ef4444' : '#22c55e',
-            fillOpacity: 1,
-            strokeColor: '#0f172a',
-            strokeWeight: 2,
-            scale: selected?.id === site.id ? 1.8 : 1.5,
-            anchor: new google.maps.Point(12, 24),
-          },
+        const equipment = site.equipment.length ? site.equipment : [{ id: `${site.id}-empty`, status: site.status, location: site.address }]
+        equipment.forEach((item, index) => {
+          const itemPosition = binMarkerPosition(position, index, equipment.length)
+          const swap = needsSwap(item)
+          const marker = new google.maps.Marker({
+            map,
+            position: itemPosition,
+            title: `Bin #${item.bin_number || 'unassigned'} - ${site.address || 'Jobsite'}`,
+            label: { text: item.bin_number ? markerLabel(item) : String(site.equipment.length), color: '#ffffff', fontWeight: '700', fontSize: '11px' },
+            icon: {
+              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+              fillColor: swap ? '#ef4444' : '#22c55e',
+              fillOpacity: 1,
+              strokeColor: selected?.id === site.id ? '#ffffff' : '#0f172a',
+              strokeWeight: selected?.id === site.id ? 3 : 2,
+              scale: swap ? 1.45 : 1.25,
+              anchor: new google.maps.Point(12, 24),
+            },
+          })
+          const info = new google.maps.InfoWindow({
+            content: `<div style="font-family:system-ui;min-width:220px"><strong>Bin #${item.bin_number || 'Unassigned'}</strong><br/>${site.address || 'Jobsite'}<br/>Status: ${swap ? 'Swap needed' : item.status || 'unknown'}<br/>Location: ${item.location || site.address || 'On site'}</div>`,
+          })
+          marker.addListener('click', () => {
+            onSelect(site.id)
+            info.open(map, marker)
+          })
+          bounds.extend(itemPosition)
         })
-        const info = new google.maps.InfoWindow({
-          content: `<div style="font-family:system-ui;min-width:180px"><strong>${site.address || 'Jobsite'}</strong><br/>Equipment: ${site.equipment.length}<br/>Needs service: ${swapCount}</div>`,
-        })
-        marker.addListener('click', () => {
-          onSelect(site.id)
-          info.open(map, marker)
-        })
-        bounds.extend(position)
       }
       if (!cancelled && sites.length > 0) map.fitBounds(bounds)
     }
@@ -299,7 +318,7 @@ export default function MapPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Equipment Map</h1>
-          <p className="text-slate-400 mt-1">See deployed equipment by jobsite and identify bins that need swaps.</p>
+          <p className="text-slate-400 mt-1">See every deployed bin by jobsite and identify the ones that need swaps.</p>
         </div>
         <div className="flex gap-2">
           {(['all', 'swap', 'ok'] as const).map(option => (
@@ -350,7 +369,7 @@ export default function MapPage() {
             <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
               <div className="text-xs uppercase tracking-wide text-slate-300">Selected jobsite Google map</div>
               <div className="text-lg font-semibold text-white">{selected?.address || 'Orlando service area'}</div>
-              <div className="text-xs text-slate-300 mt-1">Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show every bin as an interactive Google pin at once.</div>
+              <div className="text-xs text-slate-300 mt-1">Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show every bin as its own interactive Google pin.</div>
             </div>
             <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to move the map</div>
@@ -362,7 +381,7 @@ export default function MapPage() {
                     className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selected?.id === site.id ? 'border-sky-500/60 bg-sky-500/20 text-white' : 'border-slate-700/60 bg-slate-900/80 text-slate-300 hover:border-slate-500'}`}
                   >
                     <span className="block truncate font-medium">{site.address || 'Jobsite'}</span>
-                    <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins · {siteSwapCount(site)} need swap</span>
+                    <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins - {siteSwapCount(site)} need swap</span>
                   </button>
                 ))}
               </div>
