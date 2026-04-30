@@ -1,1 +1,3 @@
-LyoqIEB0eXBlIHtpbXBvcnQoJ25leHQnKS5OZXh0Q29uZmlnfSAqLwpjb25zdCBuZXh0Q29uZmlnID0ge30KbW9kdWxlLmV4cG9ydHMgPSBuZXh0Q29uZmlnCg==
+/** @type {import('next').NextConfig} */
+const nextConfig = {}
+module.exports = nextConfig
