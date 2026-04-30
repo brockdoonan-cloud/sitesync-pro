@@ -7,9 +7,9 @@ type ClientRow = { id: string; company_name?: string | null; name?: string | nul
 type JobsiteRow = { id: string; address?: string | null; status?: string | null }
 
 const emptyClient = { company_name: '', contact_name: '', email: '', phone: '', status: 'active' }
-const emptyJobsite = { address: '', lat: '', lng: '', client_id: '', status: 'active' }
-const emptyEquipment = { bin_number: '', status: 'available', location: '', client_id: '', jobsite_id: '' }
-const emptyRequest = { address: '', city: '', zip: '', equipment_type: '', scheduled_date: '', notes: '', status: 'scheduled' }
+const emptyJobsite = { name: '', address: '', lat: '', lng: '', client_id: '', status: 'active' }
+const emptyEquipment = { bin_number: '', type: 'other', status: 'available', location: '', client_id: '', jobsite_id: '' }
+const emptyRequest = { address: '', city: '', zip: '', equipment_type: '', scheduled_date: '', notes: '', status: 'confirmed' }
 const emptyInvoice = { invoice_number: '', client_id: '', total: '', status: 'open' }
 
 function todayId(prefix: string) {
@@ -65,7 +65,10 @@ export default function OperatorOnboardingPage() {
   const saveJobsite = () => run('Jobsite', async () => {
     if (!jobsite.address) throw new Error('Add the jobsite address.')
     const payload = {
+      name: jobsite.name || jobsite.address,
       address: jobsite.address,
+      city: 'Orlando',
+      state: 'FL',
       lat: jobsite.lat ? Number(jobsite.lat) : null,
       lng: jobsite.lng ? Number(jobsite.lng) : null,
       client_id: jobsite.client_id || null,
@@ -80,11 +83,16 @@ export default function OperatorOnboardingPage() {
     if (!equipment.bin_number) throw new Error('Add a bin or unit number.')
     const payload = {
       bin_number: equipment.bin_number,
+      container_number: equipment.bin_number,
+      type: equipment.type,
       status: equipment.status,
       location: equipment.location || null,
+      current_client_id: equipment.client_id || null,
       client_id: equipment.client_id || null,
+      current_jobsite_id: equipment.jobsite_id || null,
       jobsite_id: equipment.jobsite_id || null,
       last_serviced_at: new Date().toISOString(),
+      last_service_date: new Date().toISOString().slice(0, 10),
     }
     const { error: err } = await supabase.from('equipment').insert(payload)
     if (err) throw err
@@ -97,6 +105,7 @@ export default function OperatorOnboardingPage() {
       status: request.status,
       service_type: request.equipment_type,
       jobsite_address: [request.address, request.city, request.zip].filter(Boolean).join(', '),
+      service_address: [request.address, request.city, request.zip].filter(Boolean).join(', '),
       preferred_date: request.scheduled_date || null,
       notes: request.notes || null,
     }
@@ -161,6 +170,7 @@ export default function OperatorOnboardingPage() {
             <option value="">No client selected</option>
             {clients.map(row => <option key={row.id} value={row.id}>{row.company_name || row.name || row.email || row.id}</option>)}
           </select>
+          <input className="input" placeholder="Project / jobsite name" value={jobsite.name} onChange={e => setJobsite(v => ({ ...v, name: e.target.value }))} />
           <input className="input" placeholder="Exact jobsite address" value={jobsite.address} onChange={e => setJobsite(v => ({ ...v, address: e.target.value }))} />
           <div className="grid grid-cols-3 gap-3">
             <input className="input" placeholder="Latitude" value={jobsite.lat} onChange={e => setJobsite(v => ({ ...v, lat: e.target.value }))} />
@@ -178,6 +188,14 @@ export default function OperatorOnboardingPage() {
           <div><h2 className="font-semibold text-white">3. Bin / Equipment</h2><p className="text-xs text-slate-500 mt-1">Registers bin numbers and links deployed equipment to active sites.</p></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input className="input" placeholder="Bin number" value={equipment.bin_number} onChange={e => setEquipment(v => ({ ...v, bin_number: e.target.value }))} />
+            <select className="input" value={equipment.type} onChange={e => setEquipment(v => ({ ...v, type: e.target.value }))}>
+              <option value="other">Other</option>
+              <option value="washout">Washout</option>
+              <option value="slurry">Slurry</option>
+              <option value="porta_potty">Porta potty</option>
+              <option value="dumpster">Dumpster</option>
+              <option value="tank">Tank</option>
+            </select>
             <select className="input" value={equipment.status} onChange={e => setEquipment(v => ({ ...v, status: e.target.value }))}>
               <option value="available">Available</option>
               <option value="deployed">Deployed</option>
@@ -209,8 +227,8 @@ export default function OperatorOnboardingPage() {
           </div>
           <select className="input" value={request.status} onChange={e => setRequest(v => ({ ...v, status: e.target.value }))}>
             <option value="pending">Pending</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="en_route">En route</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="in_progress">In progress</option>
             <option value="completed">Completed</option>
           </select>
           <textarea className="input min-h-[80px]" placeholder="Tracking notes" value={request.notes} onChange={e => setRequest(v => ({ ...v, notes: e.target.value }))} />

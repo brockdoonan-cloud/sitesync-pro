@@ -66,9 +66,30 @@ function detectOperation(row: Record<string, unknown>) {
 
 function statusForOperation(operation: string) {
   if (operation === 'pickup') return 'available'
-  if (operation === 'water_removal') return 'needs_service'
+  if (operation === 'water_removal') return 'maintenance'
   if (operation === 'relocate') return 'deployed'
   return 'deployed'
+}
+
+function equipmentType(value: string) {
+  const lower = value.toLowerCase()
+  if (lower.includes('wash')) return 'washout'
+  if (lower.includes('slurry')) return 'slurry'
+  if (lower.includes('porta')) return 'porta_potty'
+  if (lower.includes('dump')) return 'dumpster'
+  if (lower.includes('tank')) return 'tank'
+  return 'other'
+}
+
+function serviceType(operation: string) {
+  if (operation === 'pickup') return 'removal'
+  if (operation === 'water_removal') return 'pump_out'
+  if (operation === 'delivery') return 'delivery'
+  return 'other'
+}
+
+function serviceStatus(operation: string) {
+  return operation === 'pickup' ? 'completed' : 'confirmed'
 }
 
 function isAddressLike(value: string) {
@@ -121,7 +142,7 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
               address,
               operation,
               status: statusForOperation(operation),
-              binType: clean(row.bintype) || 'container',
+              binType: equipmentType(clean(row.bintype)),
               comments: clean(row.comments),
             })
           })
@@ -212,7 +233,7 @@ export default function BulkImportPage() {
         const clientId = clientIdByName.get(row.accountName.toLowerCase()) || null
         const { data, error: err } = await supabase
           .from('jobsites')
-          .insert({ address: row.address, client_id: clientId, status: 'active' })
+          .insert({ name: row.projectName, address: row.address, city: 'Orlando', state: 'FL', client_id: clientId, status: 'active' })
           .select('id')
           .single()
         if (err) notes.push(`Jobsite ${row.projectName}: ${err.message}`)
@@ -224,22 +245,32 @@ export default function BulkImportPage() {
         const clientId = clientIdByName.get(latest.accountName.toLowerCase()) || null
         const jobsiteId = jobsiteIdByKey.get(`${latest.accountName}|${latest.projectName}|${latest.address}`.toLowerCase()) || null
         const { error: err } = await supabase.from('equipment').insert({
+          container_number: latest.binNumber,
           bin_number: latest.binNumber,
+          type: latest.binType,
           status: latest.status,
           location: latest.address,
+          current_client_id: clientId,
           client_id: clientId,
+          current_jobsite_id: latest.operation === 'pickup' ? null : jobsiteId,
           jobsite_id: latest.operation === 'pickup' ? null : jobsiteId,
           last_serviced_at: new Date().toISOString(),
+          last_service_date: new Date().toISOString().slice(0, 10),
         })
         if (err) notes.push(`Bin ${latest.binNumber}: ${err.message}`)
       }
 
       for (const row of activeRows) {
         const { error: err } = await supabase.from('service_requests').insert({
-          status: row.operation === 'delivery' ? 'scheduled' : row.operation,
-          service_type: row.operation,
+          client_id: clientIdByName.get(row.accountName.toLowerCase()) || null,
+          jobsite_id: jobsiteIdByKey.get(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase()) || null,
+          status: serviceStatus(row.operation),
+          service_type: serviceType(row.operation),
           jobsite_address: row.address,
+          service_address: row.address,
           preferred_date: null,
+          bin_number: row.binNumber,
+          priority: row.operation === 'water_removal' ? 'high' : 'normal',
           notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}${row.comments ? `\n${row.comments}` : ''}`,
         })
         if (err) notes.push(`Service ${row.binNumber}: ${err.message}`)
