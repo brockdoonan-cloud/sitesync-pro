@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Jobsite = {
   id: string
@@ -235,164 +236,108 @@ function FallbackEquipmentMap({
   onSelect: (id: string) => void
 }) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(10)
-  const [size, setSize] = useState({ width: 900, height: 560 })
-  const [center, setCenter] = useState<GoogleLatLng>(knownPosition(selected || sites[0]) || DEFAULT_CENTER)
-  const [dragging, setDragging] = useState(false)
-  const dragStart = useRef<{ x: number; y: number; world: { x: number; y: number } } | null>(null)
-  const dragFrame = useRef<number | null>(null)
-  const pendingCenter = useRef<GoogleLatLng | null>(null)
+  const leafletMap = useRef<LeafletMap | null>(null)
+  const markerLayer = useRef<{ clearLayers: () => void; addLayer: (marker: LeafletMarker) => void } | null>(null)
+  const initialCenter = useRef<GoogleLatLng>(knownPosition(selected || sites[0]) || DEFAULT_CENTER)
   const visibleBinMarkers = useMemo(() => sites.flatMap(site => site.equipment.map((item, index) => ({
     site,
     item,
     position: binMarkerPosition(knownPosition(site) || DEFAULT_CENTER, index, site.equipment.length),
   }))), [sites])
-  const centerWorld = projectLatLng(center, zoom)
-  const tiles = useMemo(() => {
-    const tileMinX = Math.floor((centerWorld.x - size.width / 2) / TILE_SIZE) - 1
-    const tileMaxX = Math.floor((centerWorld.x + size.width / 2) / TILE_SIZE) + 1
-    const tileMinY = Math.floor((centerWorld.y - size.height / 2) / TILE_SIZE) - 1
-    const tileMaxY = Math.floor((centerWorld.y + size.height / 2) / TILE_SIZE) + 1
-    const tileCount = 2 ** zoom
-    const nextTiles: { key: string; src: string; left: number; top: number }[] = []
-
-    for (let x = tileMinX; x <= tileMaxX; x++) {
-      for (let y = tileMinY; y <= tileMaxY; y++) {
-        if (y < 0 || y >= tileCount) continue
-        const wrappedX = ((x % tileCount) + tileCount) % tileCount
-        nextTiles.push({
-          key: `${zoom}-${x}-${y}`,
-          src: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
-          left: x * TILE_SIZE - centerWorld.x + size.width / 2,
-          top: y * TILE_SIZE - centerWorld.y + size.height / 2,
-        })
-      }
-    }
-
-    return nextTiles
-  }, [centerWorld.x, centerWorld.y, size.height, size.width, zoom])
 
   useEffect(() => {
-    const node = mapRef.current
-    if (!node) return
-    const update = () => setSize({ width: node.clientWidth || 900, height: node.clientHeight || 560 })
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(node)
-    return () => observer.disconnect()
+    let cancelled = false
+
+    async function initMap() {
+      if (!mapRef.current || leafletMap.current) return
+      const L = await import('leaflet')
+      if (cancelled || !mapRef.current) return
+
+      const map = L.map(mapRef.current, {
+        center: [initialCenter.current.lat, initialCenter.current.lng],
+        zoom: 10,
+        minZoom: 7,
+        maxZoom: 17,
+        preferCanvas: true,
+        zoomControl: true,
+        attributionControl: true,
+      })
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '(c) OpenStreetMap',
+      }).addTo(map)
+      markerLayer.current = L.layerGroup().addTo(map)
+      leafletMap.current = map
+    }
+
+    initMap()
+
+    return () => {
+      cancelled = true
+      leafletMap.current?.remove()
+      leafletMap.current = null
+      markerLayer.current = null
+    }
   }, [])
 
   useEffect(() => {
+    const map = leafletMap.current
+    if (!map) return
     const next = knownPosition(selected)
-    if (next) setCenter(next)
+    if (next) map.panTo([next.lat, next.lng], { animate: true, duration: 0.35 })
   }, [selected])
 
-  const panBy = (dx: number, dy: number) => {
-    const world = projectLatLng(center, zoom)
-    setCenter(unprojectLatLng({ x: world.x + dx, y: world.y + dy }, zoom))
-  }
+  useEffect(() => {
+    let cancelled = false
 
-  const zoomBy = (amount: number) => setZoom(value => Math.max(7, Math.min(16, value + amount)))
-  const stopDrag = () => {
-    if (dragFrame.current !== null) {
-      window.cancelAnimationFrame(dragFrame.current)
-      dragFrame.current = null
-    }
-    dragStart.current = null
-    pendingCenter.current = null
-    setDragging(false)
-  }
+    async function renderMarkers() {
+      const map = leafletMap.current
+      const layer = markerLayer.current
+      if (!map || !layer) return
+      const L = await import('leaflet')
+      if (cancelled) return
+      layer.clearLayers()
 
-  return (
-    <div
-      ref={mapRef}
-      onPointerDown={event => {
-        if (event.target instanceof Element && event.target.closest('button')) return
-        event.preventDefault()
-        event.currentTarget.setPointerCapture(event.pointerId)
-        dragStart.current = { x: event.clientX, y: event.clientY, world: projectLatLng(center, zoom) }
-        setDragging(true)
-      }}
-      onPointerMove={event => {
-        if (!dragStart.current) return
-        event.preventDefault()
-        const dx = event.clientX - dragStart.current.x
-        const dy = event.clientY - dragStart.current.y
-        pendingCenter.current = unprojectLatLng({ x: dragStart.current.world.x - dx, y: dragStart.current.world.y - dy }, zoom)
-        if (dragFrame.current === null) {
-          dragFrame.current = window.requestAnimationFrame(() => {
-            dragFrame.current = null
-            if (pendingCenter.current) setCenter(pendingCenter.current)
-          })
-        }
-      }}
-      onPointerUp={event => {
-        if (dragStart.current) event.currentTarget.releasePointerCapture(event.pointerId)
-        stopDrag()
-      }}
-      onPointerCancel={stopDrag}
-      onPointerLeave={stopDrag}
-      onWheel={event => {
-        event.preventDefault()
-        zoomBy(event.deltaY < 0 ? 1 : -1)
-      }}
-      className={`xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative touch-none select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-    >
-      {tiles.map(tile => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={tile.key}
-          src={tile.src}
-          alt=""
-          className="absolute h-64 w-64 select-none"
-          draggable={false}
-          style={{ left: tile.left, top: tile.top }}
-        />
-      ))}
-      <div className="absolute inset-0 bg-slate-950/5" />
-      <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-        <div className="text-xs uppercase tracking-wide text-slate-300">OpenStreetMap bin map</div>
-        <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-        <div className="text-xs text-slate-300 mt-1">Drag to pan. Wheel or use controls to zoom. Red pins need swap.</div>
-      </div>
-      <div className="absolute right-4 top-4 z-20 grid gap-1">
-        <button onClick={() => zoomBy(1)} className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/90 text-white text-lg font-bold">+</button>
-        <button onClick={() => zoomBy(-1)} className="h-9 w-9 rounded-lg border border-slate-700/70 bg-slate-950/90 text-white text-lg font-bold">-</button>
-      </div>
-      <div className="absolute right-4 top-28 z-20 grid grid-cols-3 gap-1">
-        <span />
-        <button onClick={() => panBy(0, -160)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">N</button>
-        <span />
-        <button onClick={() => panBy(-160, 0)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">W</button>
-        <button onClick={() => setCenter(DEFAULT_CENTER)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">FL</button>
-        <button onClick={() => panBy(160, 0)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">E</button>
-        <span />
-        <button onClick={() => panBy(0, 160)} className="h-8 w-8 rounded-md border border-slate-700/70 bg-slate-950/90 text-white text-xs">S</button>
-        <span />
-      </div>
-      {visibleBinMarkers.map(({ site, item, position }) => {
+      const bounds: [number, number][] = []
+      visibleBinMarkers.forEach(({ site, item, position }) => {
         const swap = needsSwap(item)
         const active = selected?.id === site.id
-        const world = projectLatLng(position, zoom)
-        const left = size.width / 2 + world.x - centerWorld.x
-        const top = size.height / 2 + world.y - centerWorld.y
-        if (left < -40 || left > size.width + 40 || top < -40 || top > size.height + 40) return null
-        return (
-          <button
-            key={`${site.id}-${item.id}`}
-            onClick={() => {
-              onSelect(site.id)
-              setCenter(knownPosition(site) || position)
-            }}
-            className={`absolute z-20 -translate-x-1/2 -translate-y-full rounded-full border-2 shadow-lg transition-all ${active ? 'border-white scale-110' : 'border-slate-950'} ${swap ? 'bg-red-500' : 'bg-green-500'}`}
-            style={{ left, top }}
-            title={`Bin #${item.bin_number || item.id.slice(0, 6)} - ${site.address || 'Jobsite'}`}
-          >
-            <span className="block min-w-8 px-1.5 py-1 text-center text-[10px] font-bold leading-none text-white">{markerLabel(item)}</span>
-          </button>
-        )
-      })}
-      <div className="absolute bottom-2 right-3 z-10 rounded bg-white/80 px-2 py-0.5 text-[10px] text-slate-700">(c) OpenStreetMap</div>
+        const icon: DivIcon = L.divIcon({
+          className: '',
+          html: `<button class="bin-map-pin ${swap ? 'bin-map-pin-swap' : 'bin-map-pin-ok'} ${active ? 'bin-map-pin-active' : ''}">${markerLabel(item)}</button>`,
+          iconSize: [34, 28],
+          iconAnchor: [17, 28],
+        })
+        const marker = L.marker([position.lat, position.lng], { icon })
+          .bindPopup(`<strong>Bin #${item.bin_number || item.id.slice(0, 6)}</strong><br/>${site.address || 'Jobsite'}<br/>${swap ? 'Swap needed' : item.status || 'OK'}`)
+          .on('click', () => onSelect(site.id))
+        layer.addLayer(marker)
+        bounds.push([position.lat, position.lng])
+      })
+
+      if (bounds.length && !selected) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 })
+    }
+
+    renderMarkers()
+
+    return () => {
+      cancelled = true
+    }
+  }, [onSelect, selected, visibleBinMarkers])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => leafletMap.current?.invalidateSize(), 100)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return (
+    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+      <div ref={mapRef} className="absolute inset-0" />
+      <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
+        <div className="text-xs uppercase tracking-wide text-slate-300">Smooth bin map</div>
+        <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
+        <div className="text-xs text-slate-300 mt-1">Drag and wheel zoom are handled by Leaflet. Red pins need swap.</div>
+      </div>
       <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to inspect bins</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
