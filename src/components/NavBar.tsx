@@ -3,11 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { isOperatorUser } from '@/lib/operator'
 
 export default function NavBar({ user, profile }: { user: any; profile: any }) {
   const router = useRouter()
   const pathname = usePathname()
-  const isOp = profile?.role === 'operator' || profile?.role === 'admin'
+  const isOp = isOperatorUser(profile, user?.email)
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -45,7 +46,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
             </div>
             <span className="font-bold text-white text-sm hidden sm:block">SiteSync Pro</span>
           </Link>
-          <div className="hidden md:flex items-center gap-0.5 overflow-x-auto">
+          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
             {links.map(link => (
               <Link
                 href={link.href}
@@ -67,6 +68,23 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
             <div className="text-xs text-slate-500 capitalize">{profile?.company_name || profile?.role}</div>
           </div>
           <button onClick={handleSignOut} className="text-slate-400 hover:text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-700/50">Sign Out</button>
+        </div>
+      </div>
+      <div className="container mx-auto px-4 max-w-7xl pb-2 lg:hidden">
+        <div className="flex gap-1 overflow-x-auto">
+          {links.map(link => (
+            <Link
+              href={link.href}
+              key={link.href}
+              className={`shrink-0 px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                pathname === link.href
+                  ? 'bg-slate-700 text-white font-medium'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
         </div>
       </div>
     </nav>

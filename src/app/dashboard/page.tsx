@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { isOperatorUser } from '@/lib/operator'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -13,8 +14,6 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  const role = profile?.role ?? 'customer'
-
-  if (role === 'operator' || role === 'admin') redirect('/dashboard/operator')
+  if (isOperatorUser(profile, user.email)) redirect('/dashboard/operator')
   redirect('/dashboard/customer')
 }
