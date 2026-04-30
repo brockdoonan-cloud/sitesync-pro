@@ -27,10 +27,10 @@ export default async function OperatorRequestsPage() {
                   <span className={`badge-${req.status}`}>{req.status}</span>
                 </div>
                 <div className="space-y-1 text-sm text-slate-400">
-                  <div>📍 {req.jobsite_address}</div>
-                  <div>👤 {req.profiles?.company_name ?? req.profiles?.full_name}</div>
-                  {req.preferred_date && <div>📅 {new Date(req.preferred_date).toLocaleDateString()}</div>}
-                  {req.notes && <div>📝 {req.notes}</div>}
+                  <div> {req.jobsite_address}</div>
+                  <div> {req.profiles?.company_name ?? req.profiles?.full_name}</div>
+                  {req.preferred_date && <div> {new Date(req.preferred_date).toLocaleDateString()}</div>}
+                  {req.notes && <div> {req.notes}</div>}
                 </div>
               </div>
               <UpdateRequestStatus requestId={req.id} currentStatus={req.status} />
