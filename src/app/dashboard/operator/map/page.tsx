@@ -240,31 +240,37 @@ function FallbackEquipmentMap({
   const [center, setCenter] = useState<GoogleLatLng>(knownPosition(selected || sites[0]) || DEFAULT_CENTER)
   const [dragging, setDragging] = useState(false)
   const dragStart = useRef<{ x: number; y: number; world: { x: number; y: number } } | null>(null)
-  const visibleBinMarkers = sites.flatMap(site => site.equipment.map((item, index) => ({
+  const dragFrame = useRef<number | null>(null)
+  const pendingCenter = useRef<GoogleLatLng | null>(null)
+  const visibleBinMarkers = useMemo(() => sites.flatMap(site => site.equipment.map((item, index) => ({
     site,
     item,
     position: binMarkerPosition(knownPosition(site) || DEFAULT_CENTER, index, site.equipment.length),
-  })))
+  }))), [sites])
   const centerWorld = projectLatLng(center, zoom)
-  const tileMinX = Math.floor((centerWorld.x - size.width / 2) / TILE_SIZE) - 1
-  const tileMaxX = Math.floor((centerWorld.x + size.width / 2) / TILE_SIZE) + 1
-  const tileMinY = Math.floor((centerWorld.y - size.height / 2) / TILE_SIZE) - 1
-  const tileMaxY = Math.floor((centerWorld.y + size.height / 2) / TILE_SIZE) + 1
-  const tileCount = 2 ** zoom
-  const tiles: { key: string; src: string; left: number; top: number }[] = []
+  const tiles = useMemo(() => {
+    const tileMinX = Math.floor((centerWorld.x - size.width / 2) / TILE_SIZE) - 1
+    const tileMaxX = Math.floor((centerWorld.x + size.width / 2) / TILE_SIZE) + 1
+    const tileMinY = Math.floor((centerWorld.y - size.height / 2) / TILE_SIZE) - 1
+    const tileMaxY = Math.floor((centerWorld.y + size.height / 2) / TILE_SIZE) + 1
+    const tileCount = 2 ** zoom
+    const nextTiles: { key: string; src: string; left: number; top: number }[] = []
 
-  for (let x = tileMinX; x <= tileMaxX; x++) {
-    for (let y = tileMinY; y <= tileMaxY; y++) {
-      if (y < 0 || y >= tileCount) continue
-      const wrappedX = ((x % tileCount) + tileCount) % tileCount
-      tiles.push({
-        key: `${zoom}-${x}-${y}`,
-        src: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
-        left: x * TILE_SIZE - centerWorld.x + size.width / 2,
-        top: y * TILE_SIZE - centerWorld.y + size.height / 2,
-      })
+    for (let x = tileMinX; x <= tileMaxX; x++) {
+      for (let y = tileMinY; y <= tileMaxY; y++) {
+        if (y < 0 || y >= tileCount) continue
+        const wrappedX = ((x % tileCount) + tileCount) % tileCount
+        nextTiles.push({
+          key: `${zoom}-${x}-${y}`,
+          src: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
+          left: x * TILE_SIZE - centerWorld.x + size.width / 2,
+          top: y * TILE_SIZE - centerWorld.y + size.height / 2,
+        })
+      }
     }
-  }
+
+    return nextTiles
+  }, [centerWorld.x, centerWorld.y, size.height, size.width, zoom])
 
   useEffect(() => {
     const node = mapRef.current
@@ -288,7 +294,12 @@ function FallbackEquipmentMap({
 
   const zoomBy = (amount: number) => setZoom(value => Math.max(7, Math.min(16, value + amount)))
   const stopDrag = () => {
+    if (dragFrame.current !== null) {
+      window.cancelAnimationFrame(dragFrame.current)
+      dragFrame.current = null
+    }
     dragStart.current = null
+    pendingCenter.current = null
     setDragging(false)
   }
 
@@ -307,7 +318,13 @@ function FallbackEquipmentMap({
         event.preventDefault()
         const dx = event.clientX - dragStart.current.x
         const dy = event.clientY - dragStart.current.y
-        setCenter(unprojectLatLng({ x: dragStart.current.world.x - dx, y: dragStart.current.world.y - dy }, zoom))
+        pendingCenter.current = unprojectLatLng({ x: dragStart.current.world.x - dx, y: dragStart.current.world.y - dy }, zoom)
+        if (dragFrame.current === null) {
+          dragFrame.current = window.requestAnimationFrame(() => {
+            dragFrame.current = null
+            if (pendingCenter.current) setCenter(pendingCenter.current)
+          })
+        }
       }}
       onPointerUp={event => {
         if (dragStart.current) event.currentTarget.releasePointerCapture(event.pointerId)
