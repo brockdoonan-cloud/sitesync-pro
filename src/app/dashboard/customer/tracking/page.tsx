@@ -1,8 +1,222 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+import { useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
-export default async function TrackingPage() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data: requests } = await supabase.from('service_requests').select('*').eq('customer_id',user!.id).in('status',['confirmed','dispatched','in_progress']).order('updated_at',{ascending:false})
-  return(<div className="space-y-6"><div><h1 className="text-2xl font-bold text-white">Live Tracking</h1><p className="text-slate-400 mt-1">Track your active service requests in real time</p></div>{requests&&requests.length>0?(<div className="space-y-4">{requests.map((req:any)=>(<div key={req.id} className="card border-l-4 border-l-sky-500"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 mb-2"><h3 className="font-semibold text-white">{req.service_type?.replace(/_/g,' ').replace(/\b\w/g,(c:string)=>c.toUpperCase())}</h3><span className={`badge-${req.status}`}>{req.status?.replace(/_/g,' ')}</span></div><div className="text-sm text-slate-400 space-y-1">{req.jobsite_address&&<div> {req.jobsite_address}</div={req.dispatched_at&&<div>{@Dispatched: {new Date(req.dispatched_at).toLocaleTimeString()}</div={req.arrived_at&&<div> On Site: {new Date(req.arrived_at).toLocaleTimeString()}</div>}</div></div></div></div>))}</div>):(<div className="card text-center py-12"><div className="text-4xl mb-3"></div><h3 className="font-semibold text-white mb-2">No Active Jobs</h3><p className="text-slate-400 text-sm">Your confirmed service requests will appear here with live status updates.</p></div>)}</div>)
+type ServiceRequest = {
+  id: string
+  status: string | null
+  address?: string | null
+  city?: string | null
+  zip?: string | null
+  equipment_type?: string | null
+  scheduled_date?: string | null
+  notes?: string | null
+  created_at?: string | null
+  jobsite_address?: string | null
+  service_type?: string | null
+  preferred_date?: string | null
+}
+
+const statusSteps = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'en_route', label: 'En Route' },
+  { key: 'completed', label: 'Completed' },
+]
+
+const activeStatuses = ['pending', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'in_progress', 'completed']
+
+function normalizeStatus(status?: string | null) {
+  if (status === 'confirmed') return 'scheduled'
+  if (status === 'dispatched' || status === 'in_progress') return 'en_route'
+  return status || 'pending'
+}
+
+function titleize(value?: string | null) {
+  return value?.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase()) || 'Service Request'
+}
+
+function requestAddress(request: ServiceRequest) {
+  return [request.address || request.jobsite_address, request.city, request.zip].filter(Boolean).join(', ')
+}
+
+function requestDate(request: ServiceRequest) {
+  const value = request.scheduled_date || request.preferred_date || request.created_at
+  if (!value) return 'Date pending'
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function mapUrl(address: string) {
+  return 'https://www.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed'
+}
+
+function ProgressTracker({ status }: { status: string }) {
+  const normalized = normalizeStatus(status)
+  const currentIndex = Math.max(0, statusSteps.findIndex(step => step.key === normalized))
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {statusSteps.map((step, index) => {
+        const isDone = index <= currentIndex
+        return (
+          <div key={step.key} className="space-y-2">
+            <div className={'h-2 rounded-full ' + (isDone ? 'bg-sky-400' : 'bg-slate-700')} />
+            <div className={'text-xs font-medium ' + (isDone ? 'text-white' : 'text-slate-500')}>{step.label}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export default function TrackingPage() {
+  const [requests, setRequests] = useState<ServiceRequest[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadRequests() {
+      setLoading(true)
+      setError('')
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        if (isMounted) { setError('Please sign in to view live tracking.'); setLoading(false) }
+        return
+      }
+      const { data, error: requestError } = await supabase
+        .from('service_requests')
+        .select('*')
+        .eq('customer_id', user.id)
+        .in('status', activeStatuses)
+        .order('created_at', { ascending: false })
+      if (!isMounted) return
+      if (requestError) {
+        setError(requestError.message)
+        setRequests([])
+      } else {
+        const rows = (data || []) as ServiceRequest[]
+        setRequests(rows)
+        setSelectedId(rows[0]?.id ?? null)
+      }
+      setLoading(false)
+    }
+    loadRequests()
+    return () => { isMounted = false }
+  }, [])
+
+  const selectedRequest = useMemo(
+    () => requests.find(request => request.id === selectedId) || requests[0],
+    [requests, selectedId]
+  )
+  const selectedAddress = selectedRequest ? requestAddress(selectedRequest) : ''
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-sm font-medium uppercase tracking-wide text-sky-300">Customer Portal</p>
+        <h1 className="mt-1 text-2xl font-bold text-white">Live Tracking</h1>
+        <p className="mt-1 text-sm text-slate-400">Follow active service requests from pending to completion.</p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-6 text-slate-300">
+          Loading your active requests...
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-8 text-center">
+          <h2 className="text-lg font-semibold text-white">No active service requests</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
+            When a delivery, swap, pickup, or other request is scheduled, live status and location details will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <section className="space-y-4">
+            {requests.map(request => {
+              const address = requestAddress(request)
+              const status = normalizeStatus(request.status)
+              const isSelected = request.id === selectedRequest?.id
+              return (
+                <button
+                  key={request.id}
+                  type="button"
+                  onClick={() => setSelectedId(request.id)}
+                  className={'w-full rounded-lg border p-4 text-left transition ' + (isSelected ? 'border-sky-400 bg-sky-500/10' : 'border-slate-700/50 bg-slate-800/40 hover:border-slate-500')}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-white">
+                        {titleize(request.equipment_type || request.service_type)}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-400">{address || 'Jobsite address pending'}</p>
+                    </div>
+                    <span className="inline-flex w-fit rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
+                      {titleize(status)}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
+                    <div>Scheduled: <span className="text-slate-200">{requestDate(request)}</span></div>
+                    {request.notes && <div>Notes: <span className="text-slate-200">{request.notes}</span></div>}
+                  </div>
+                  <div className="mt-4">
+                    <ProgressTracker status={status} />
+                  </div>
+                </button>
+              )
+            })}
+          </section>
+
+          <aside className="space-y-4">
+            <div className="overflow-hidden rounded-lg border border-slate-700/50 bg-slate-800/40">
+              <div className="border-b border-slate-700/50 px-4 py-3">
+                <h2 className="font-semibold text-white">Jobsite Map</h2>
+                <p className="mt-1 text-sm text-slate-400">{selectedAddress || 'Select a request with an address.'}</p>
+              </div>
+              {selectedAddress ? (
+                <iframe
+                  title="Assigned jobsite map"
+                  src={mapUrl(selectedAddress)}
+                  className="h-80 w-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="flex h-80 items-center justify-center px-6 text-center text-sm text-slate-400">
+                  Map details will appear once a jobsite address is assigned.
+                </div>
+              )}
+            </div>
+
+            {selectedRequest && (
+              <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-4">
+                <h2 className="font-semibold text-white">Selected Request</h2>
+                <dl className="mt-4 space-y-3 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-400">Status</dt>
+                    <dd className="font-medium text-white">{titleize(normalizeStatus(selectedRequest.status))}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-400">Equipment</dt>
+                    <dd className="font-medium text-white">{titleize(selectedRequest.equipment_type || selectedRequest.service_type)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-400">Date</dt>
+                    <dd className="font-medium text-white">{requestDate(selectedRequest)}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
+    </div>
+  )
 }
