@@ -220,6 +220,17 @@ export default function BulkImportPage() {
       }
 
       for (const row of clients) {
+        const { data: existing } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('company_name', row.accountName)
+          .limit(1)
+
+        if (existing?.[0]?.id) {
+          clientIdByName.set(row.accountName.toLowerCase(), existing[0].id)
+          continue
+        }
+
         const { data, error: err } = await supabase
           .from('clients')
           .insert({ company_name: row.accountName, status: 'active' })
@@ -231,6 +242,18 @@ export default function BulkImportPage() {
 
       for (const row of jobsites) {
         const clientId = clientIdByName.get(row.accountName.toLowerCase()) || null
+        const { data: existing } = await supabase
+          .from('jobsites')
+          .select('id')
+          .eq('name', row.projectName)
+          .eq('address', row.address)
+          .limit(1)
+
+        if (existing?.[0]?.id) {
+          jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), existing[0].id)
+          continue
+        }
+
         const { data, error: err } = await supabase
           .from('jobsites')
           .insert({ name: row.projectName, address: row.address, city: 'Orlando', state: 'FL', client_id: clientId, status: 'active' })
@@ -244,7 +267,7 @@ export default function BulkImportPage() {
         const latest = rows.find(item => item.binNumber === row.binNumber) || row
         const clientId = clientIdByName.get(latest.accountName.toLowerCase()) || null
         const jobsiteId = jobsiteIdByKey.get(`${latest.accountName}|${latest.projectName}|${latest.address}`.toLowerCase()) || null
-        const { error: err } = await supabase.from('equipment').insert({
+        const payload = {
           container_number: latest.binNumber,
           bin_number: latest.binNumber,
           type: latest.binType,
@@ -256,11 +279,28 @@ export default function BulkImportPage() {
           jobsite_id: latest.operation === 'pickup' ? null : jobsiteId,
           last_serviced_at: new Date().toISOString(),
           last_service_date: new Date().toISOString().slice(0, 10),
-        })
+        }
+        const { data: existing } = await supabase
+          .from('equipment')
+          .select('id')
+          .eq('container_number', latest.binNumber)
+          .limit(1)
+        const { error: err } = existing?.[0]?.id
+          ? await supabase.from('equipment').update(payload).eq('id', existing[0].id)
+          : await supabase.from('equipment').insert(payload)
         if (err) notes.push(`Bin ${latest.binNumber}: ${err.message}`)
       }
 
       for (const row of activeRows) {
+        const { data: existing } = await supabase
+          .from('service_requests')
+          .select('id')
+          .eq('bin_number', row.binNumber)
+          .eq('jobsite_address', row.address)
+          .limit(1)
+
+        if (existing?.[0]?.id) continue
+
         const { error: err } = await supabase.from('service_requests').insert({
           client_id: clientIdByName.get(row.accountName.toLowerCase()) || null,
           jobsite_id: jobsiteIdByKey.get(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase()) || null,
