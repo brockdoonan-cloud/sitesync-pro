@@ -26,6 +26,29 @@ type MapSite = Jobsite & {
   y: number
 }
 
+const KNOWN_ADDRESS_COORDS: Record<string, GoogleLatLng> = {
+  '255 s orange ave, orlando, fl 32801': { lat: 28.5384, lng: -81.3789 },
+  '400 w church st, orlando, fl 32801': { lat: 28.5406, lng: -81.3839 },
+  '655 w church st, orlando, fl 32805': { lat: 28.5409, lng: -81.3911 },
+  '9801 international dr, orlando, fl 32819': { lat: 28.4239, lng: -81.4697 },
+  '1 jeff fuqua blvd, orlando, fl 32827': { lat: 28.4312, lng: -81.3081 },
+  '701 front st, celebration, fl 34747': { lat: 28.3185, lng: -81.5418 },
+  '200 e robinson st, orlando, fl 32801': { lat: 28.5451, lng: -81.3751 },
+  '6000 universal blvd, orlando, fl 32819': { lat: 28.4720, lng: -81.4678 },
+  '1180 seven seas dr, lake buena vista, fl 32830': { lat: 28.4177, lng: -81.5812 },
+  '100 n woodland blvd, deland, fl 32720': { lat: 29.0283, lng: -81.3031 },
+  '301 w 13th st, sanford, fl 32771': { lat: 28.8006, lng: -81.2744 },
+  '951 market promenade ave, lake mary, fl 32746': { lat: 28.7850, lng: -81.3576 },
+  '14111 shoreside way, winter garden, fl 34787': { lat: 28.4616, lng: -81.6148 },
+  '6900 tavistock lakes blvd, orlando, fl 32827': { lat: 28.3720, lng: -81.2787 },
+  '7007 sea world dr, orlando, fl 32821': { lat: 28.4114, lng: -81.4615 },
+  '1500 masters blvd, championsgate, fl 33896': { lat: 28.2616, lng: -81.6237 },
+  '101 adventure ct, davenport, fl 33837': { lat: 28.1614, lng: -81.6087 },
+  '4012 central florida pkwy, orlando, fl 32837': { lat: 28.4016, lng: -81.4295 },
+  '260 n tubb st, oakland, fl 34760': { lat: 28.5566, lng: -81.6317 },
+  '201 e pine st, orlando, fl 32801': { lat: 28.5415, lng: -81.3760 },
+}
+
 const DEMO_SITES: MapSite[] = [
   {
     id: 'demo-north-yard',
@@ -82,9 +105,13 @@ function statusClass(status?: string) {
   return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
 }
 
-function googleEmbedUrl(site?: MapSite) {
-  const query = site?.address || 'Orlando FL construction jobsites'
-  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+function normalizeAddress(address?: string) {
+  return (address || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function knownPosition(site: Jobsite): GoogleLatLng | null {
+  if (typeof site.lat === 'number' && typeof site.lng === 'number') return { lat: site.lat, lng: site.lng }
+  return KNOWN_ADDRESS_COORDS[normalizeAddress(site.address)] || null
 }
 
 function binMarkerPosition(position: GoogleLatLng, index: number, total: number) {
@@ -113,13 +140,14 @@ function binOverlayPoint(site: MapSite, index: number, total: number) {
 }
 
 function coordToPoint(site: Jobsite, index: number, total: number) {
-  if (typeof site.lat === 'number' && typeof site.lng === 'number') {
-    const minLat = 28.2
-    const maxLat = 28.9
-    const minLng = -81.65
-    const maxLng = -81.1
-    const x = ((site.lng - minLng) / (maxLng - minLng)) * 80 + 10
-    const y = (1 - ((site.lat - minLat) / (maxLat - minLat))) * 74 + 12
+  const position = knownPosition(site)
+  if (position) {
+    const minLat = 28.05
+    const maxLat = 29.08
+    const minLng = -81.95
+    const maxLng = -80.95
+    const x = ((position.lng - minLng) / (maxLng - minLng)) * 82 + 9
+    const y = (1 - ((position.lat - minLat) / (maxLat - minLat))) * 76 + 12
     return {
       x: Math.max(8, Math.min(92, x)),
       y: Math.max(10, Math.min(88, y)),
@@ -211,7 +239,8 @@ function GoogleEquipmentMap({
     const geocoder = new google.maps.Geocoder()
 
     async function positionFor(site: MapSite): Promise<GoogleLatLng | null> {
-      if (typeof site.lat === 'number' && typeof site.lng === 'number') return { lat: site.lat, lng: site.lng }
+      const known = knownPosition(site)
+      if (known) return known
       if (!site.address) return null
       try {
         const result = await geocoder.geocode({ address: site.address })
@@ -374,18 +403,17 @@ export default function MapPage() {
           <GoogleEquipmentMap sites={filteredSites} selected={selected} onSelect={setSelectedId} />
         ) : (
           <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-            <iframe
-              title="Orlando equipment Google map"
-              src={googleEmbedUrl()}
-              className="absolute inset-0 h-full w-full border-0 opacity-90"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-            <div className="absolute inset-0 bg-slate-950/10" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] bg-[size:48px_48px]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_72%_70%,rgba(34,197,94,0.12),transparent_30%)]" />
+            <div className="absolute left-[18%] top-[18%] h-[62%] w-[62%] rounded-[42%] border border-slate-600/40 bg-slate-800/35 rotate-12" />
+            <div className="absolute left-[24%] top-[26%] text-xs text-slate-500">DeLand</div>
+            <div className="absolute left-[38%] top-[44%] text-xs text-slate-500">Orlando</div>
+            <div className="absolute left-[18%] top-[70%] text-xs text-slate-500">ChampionsGate</div>
+            <div className="absolute left-[60%] top-[55%] text-xs text-slate-500">Lake Nona</div>
             <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-300">Bin location overlay</div>
+              <div className="text-xs uppercase tracking-wide text-slate-300">Central Florida bin map</div>
               <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-              <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Add the Google Maps API key for exact geocoded marker placement.</div>
+              <div className="text-xs text-slate-300 mt-1">Red pins need swap. Green pins are okay. Pin positions use stored jobsite lat/lng when available.</div>
             </div>
             {visibleBinMarkers.map(({ site, item, point }) => {
               const swap = needsSwap(item)

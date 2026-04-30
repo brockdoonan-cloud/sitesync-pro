@@ -11,6 +11,8 @@ type ImportRow = {
   accountName: string
   projectName: string
   address: string
+  lat?: number
+  lng?: number
   operation: string
   status: string
   binType: string
@@ -50,6 +52,29 @@ const FLORIDA_DEMO_ADDRESSES = [
   '260 N Tubb St, Oakland, FL 34760',
   '201 E Pine St, Orlando, FL 32801',
 ]
+
+const FLORIDA_DEMO_COORDS: Record<string, { lat: number; lng: number }> = {
+  '255 S Orange Ave, Orlando, FL 32801': { lat: 28.5384, lng: -81.3789 },
+  '400 W Church St, Orlando, FL 32801': { lat: 28.5406, lng: -81.3839 },
+  '655 W Church St, Orlando, FL 32805': { lat: 28.5409, lng: -81.3911 },
+  '9801 International Dr, Orlando, FL 32819': { lat: 28.4239, lng: -81.4697 },
+  '1 Jeff Fuqua Blvd, Orlando, FL 32827': { lat: 28.4312, lng: -81.3081 },
+  '701 Front St, Celebration, FL 34747': { lat: 28.3185, lng: -81.5418 },
+  '200 E Robinson St, Orlando, FL 32801': { lat: 28.5451, lng: -81.3751 },
+  '6000 Universal Blvd, Orlando, FL 32819': { lat: 28.4720, lng: -81.4678 },
+  '1180 Seven Seas Dr, Lake Buena Vista, FL 32830': { lat: 28.4177, lng: -81.5812 },
+  '100 N Woodland Blvd, DeLand, FL 32720': { lat: 29.0283, lng: -81.3031 },
+  '301 W 13th St, Sanford, FL 32771': { lat: 28.8006, lng: -81.2744 },
+  '951 Market Promenade Ave, Lake Mary, FL 32746': { lat: 28.7850, lng: -81.3576 },
+  '14111 Shoreside Way, Winter Garden, FL 34787': { lat: 28.4616, lng: -81.6148 },
+  '6900 Tavistock Lakes Blvd, Orlando, FL 32827': { lat: 28.3720, lng: -81.2787 },
+  '7007 Sea World Dr, Orlando, FL 32821': { lat: 28.4114, lng: -81.4615 },
+  '1500 Masters Blvd, ChampionsGate, FL 33896': { lat: 28.2616, lng: -81.6237 },
+  '101 Adventure Ct, Davenport, FL 33837': { lat: 28.1614, lng: -81.6087 },
+  '4012 Central Florida Pkwy, Orlando, FL 32837': { lat: 28.4016, lng: -81.4295 },
+  '260 N Tubb St, Oakland, FL 34760': { lat: 28.5566, lng: -81.6317 },
+  '201 E Pine St, Orlando, FL 32801': { lat: 28.5415, lng: -81.3760 },
+}
 
 function clean(value: unknown) {
   return String(value ?? '').trim()
@@ -147,6 +172,7 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
             if (projectAddress) addressByProject.set(projectKey, projectAddress)
             if (!addressByProject.has(projectKey)) addressByProject.set(projectKey, deterministicAddress(accountName, projectName, binNumber))
             const address = addressByProject.get(projectKey) || projectAddress
+            const coords = FLORIDA_DEMO_COORDS[address]
 
             parsed.push({
               id: `${sheetName}-${index}-${binNumber}`,
@@ -155,6 +181,8 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
               accountName,
               projectName,
               address,
+              lat: coords?.lat,
+              lng: coords?.lng,
               operation,
               status: statusForOperation(operation),
               binType: equipmentType(clean(row.bintype)),
@@ -290,7 +318,7 @@ export default function BulkImportPage() {
 
         const { data, error: err } = await supabase
           .from('jobsites')
-          .insert({ name: row.projectName, address: row.address, city: 'Orlando', state: 'FL', client_id: clientId, status: 'active' })
+          .insert({ name: row.projectName, address: row.address, city: 'Orlando', state: 'FL', client_id: clientId, status: 'active', lat: row.lat ?? null, lng: row.lng ?? null })
           .select('id')
           .single()
         if (err) notes.push(`Jobsite ${row.projectName}: ${err.message}`)
