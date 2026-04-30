@@ -82,6 +82,11 @@ function statusClass(status?: string) {
   return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
 }
 
+function googleEmbedUrl(site?: MapSite) {
+  const query = site?.address || 'Orlando FL construction jobsites'
+  return `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`
+}
+
 function coordToPoint(site: Jobsite, index: number, total: number) {
   if (typeof site.lat === 'number' && typeof site.lng === 'number') {
     const minLat = 28.2
@@ -335,31 +340,32 @@ export default function MapPage() {
           <GoogleEquipmentMap sites={filteredSites} selected={selected} onSelect={setSelectedId} />
         ) : (
           <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
-            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/80 to-transparent" />
-            <div className="absolute left-4 top-4 z-10">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Orlando service area</div>
-              <div className="text-lg font-semibold text-white">Live Equipment Map</div>
-              <div className="text-xs text-slate-500 mt-1">Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for Google Maps.</div>
+            <iframe
+              title="Selected jobsite Google map"
+              src={googleEmbedUrl(selected)}
+              className="absolute inset-0 h-full w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+            <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-300">Selected jobsite Google map</div>
+              <div className="text-lg font-semibold text-white">{selected?.address || 'Orlando service area'}</div>
+              <div className="text-xs text-slate-300 mt-1">Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show every bin as an interactive Google pin at once.</div>
             </div>
-            {filteredSites.map(site => {
-              const count = siteSwapCount(site)
-              const selectedPin = selected?.id === site.id
-              return (
-                <button
-                  key={site.id}
-                  onClick={() => setSelectedId(site.id)}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full border-2 shadow-lg transition-all ${selectedPin ? 'h-12 w-12 border-white scale-110' : 'h-9 w-9 border-slate-950'} ${count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ left: `${site.x}%`, top: `${site.y}%` }}
-                  title={site.address || 'Jobsite'}
-                >
-                  <span className="text-xs font-bold text-white">{site.equipment.length}</span>
-                </button>
-              )
-            })}
-            <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Green pins: equipment okay</div>
-              <div className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">Red pins: one or more swaps needed</div>
+            <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to move the map</div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {filteredSites.slice(0, 8).map(site => (
+                  <button
+                    key={site.id}
+                    onClick={() => setSelectedId(site.id)}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selected?.id === site.id ? 'border-sky-500/60 bg-sky-500/20 text-white' : 'border-slate-700/60 bg-slate-900/80 text-slate-300 hover:border-slate-500'}`}
+                  >
+                    <span className="block truncate font-medium">{site.address || 'Jobsite'}</span>
+                    <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins · {siteSwapCount(site)} need swap</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
