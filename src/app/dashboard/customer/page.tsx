@@ -1,5 +1,5 @@
 'use client'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 export default async function CustomerDashboard() {
   const supabase = createClient()
