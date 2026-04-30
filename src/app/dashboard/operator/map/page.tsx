@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 
 type Jobsite = {
   id: string
-  name?: string
   address?: string
   lat?: number
   lng?: number
@@ -30,8 +29,7 @@ type MapSite = Jobsite & {
 const DEMO_SITES: MapSite[] = [
   {
     id: 'demo-north-yard',
-    name: 'Lake Mary Retail Buildout',
-    address: 'Lake Mary Blvd, Lake Mary, FL',
+    address: 'Lake Mary Retail Buildout, Lake Mary Blvd, Lake Mary, FL',
     lat: 28.7589,
     lng: -81.3178,
     status: 'active',
@@ -44,8 +42,7 @@ const DEMO_SITES: MapSite[] = [
   },
   {
     id: 'demo-downtown',
-    name: 'Downtown Orlando Remodel',
-    address: 'Central Blvd, Orlando, FL',
+    address: 'Downtown Orlando Remodel, Central Blvd, Orlando, FL',
     lat: 28.5421,
     lng: -81.3790,
     status: 'active',
@@ -57,8 +54,7 @@ const DEMO_SITES: MapSite[] = [
   },
   {
     id: 'demo-lake-nona',
-    name: 'Lake Nona Medical Pad',
-    address: 'Narcoossee Rd, Orlando, FL',
+    address: 'Lake Nona Medical Pad, Narcoossee Rd, Orlando, FL',
     lat: 28.3954,
     lng: -81.2440,
     status: 'scheduled',
@@ -118,7 +114,7 @@ export default function MapPage() {
     setLoading(true)
     const supabase = createClient()
     const [{ data: jobsites }, { data: equipment }] = await Promise.all([
-      supabase.from('jobsites').select('id,name,address,lat,lng,status').order('status', { ascending: true }),
+      supabase.from('jobsites').select('id,address,lat,lng,status').order('status', { ascending: true }),
       supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }),
     ])
 
@@ -209,7 +205,7 @@ export default function MapPage() {
                 onClick={() => setSelectedId(site.id)}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 rounded-full border-2 shadow-lg transition-all ${selectedPin ? 'h-12 w-12 border-white scale-110' : 'h-9 w-9 border-slate-950'} ${count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
                 style={{ left: `${site.x}%`, top: `${site.y}%` }}
-                title={site.name || site.address || 'Jobsite'}
+                title={site.address || 'Jobsite'}
               >
                 <span className="text-xs font-bold text-white">{site.equipment.length}</span>
               </button>
@@ -225,7 +221,7 @@ export default function MapPage() {
           <div className="card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-white">{selected?.name || 'Select a jobsite'}</h2>
+                <h2 className="text-lg font-semibold text-white">{selected?.address || 'Select a jobsite'}</h2>
                 <p className="text-slate-400 text-sm mt-1">{selected?.address || 'No address on file'}</p>
               </div>
               {selected && <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(selected.status)}`}>{selected.status || 'unknown'}</span>}
@@ -273,7 +269,7 @@ export default function MapPage() {
                 {sites.flatMap(site => site.equipment.filter(needsSwap).map(item => ({ site, item }))).map(({ site, item }) => (
                   <button key={item.id} onClick={() => setSelectedId(site.id)} className="w-full text-left rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 hover:border-red-500/40 transition-colors">
                     <div className="text-sm font-medium text-white">Bin #{item.bin_number || item.id.slice(0, 6)}</div>
-                    <div className="text-xs text-red-300">{site.name || site.address || 'Jobsite'} needs swap</div>
+                    <div className="text-xs text-red-300">{site.address || 'Jobsite'} needs swap</div>
                   </button>
                 ))}
               </div>

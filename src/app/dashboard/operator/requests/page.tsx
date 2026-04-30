@@ -6,7 +6,7 @@ export default async function OperatorRequestsPage() {
 
   const { data: requests } = await supabase
     .from('service_requests')
-    .select('*, profiles(full_name, company_name)')
+    .select('*')
     .order('created_at', { ascending: false })
 
   return (
@@ -22,14 +22,13 @@ export default async function OperatorRequestsPage() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="font-semibold text-white">
-                    {req.service_type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                    {(req.service_type || req.equipment_type || 'Service request')?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                   </h3>
                   <span className={`badge-${req.status}`}>{req.status}</span>
                 </div>
                 <div className="space-y-1 text-sm text-slate-400">
-                  <div> {req.jobsite_address}</div>
-                  <div> {req.profiles?.company_name ?? req.profiles?.full_name}</div>
-                  {req.preferred_date && <div> {new Date(req.preferred_date).toLocaleDateString()}</div>}
+                  <div>{req.jobsite_address || [req.address, req.city, req.zip].filter(Boolean).join(', ') || 'No address'}</div>
+                  {(req.preferred_date || req.scheduled_date) && <div>{new Date(req.preferred_date || req.scheduled_date).toLocaleDateString()}</div>}
                   {req.notes && <div> {req.notes}</div>}
                 </div>
               </div>

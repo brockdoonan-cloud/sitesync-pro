@@ -19,6 +19,7 @@ export default async function OperatorDashboard() {
   }
 
   const navCards = [
+    { href: '/dashboard/operator/onboarding', label: 'Setup Real Data', desc: 'Onboard clients, jobsites, bins, and balances', highlight: true },
     { href: '/dashboard/operator/jobs', label: 'Jobs', desc: 'Active service jobs' },
     { href: '/dashboard/operator/leads', label: 'Quote Leads', desc: 'New quote requests', highlight: stats.leads > 0 },
     { href: '/dashboard/operator/equipment', label: 'Equipment', desc: 'Bins and containers' },
