@@ -50,7 +50,11 @@ alter table public.clients
   add column if not exists created_at timestamptz default now();
 
 alter table public.jobsites
+  add column if not exists name text,
   add column if not exists address text,
+  add column if not exists city text,
+  add column if not exists state text,
+  add column if not exists zip text,
   add column if not exists lat double precision,
   add column if not exists lng double precision,
   add column if not exists client_id uuid,
@@ -58,12 +62,17 @@ alter table public.jobsites
   add column if not exists created_at timestamptz default now();
 
 alter table public.equipment
+  add column if not exists container_number text,
   add column if not exists bin_number text,
+  add column if not exists type text,
   add column if not exists status text default 'available',
   add column if not exists location text,
+  add column if not exists current_client_id uuid,
   add column if not exists client_id uuid,
+  add column if not exists current_jobsite_id uuid,
   add column if not exists jobsite_id uuid,
   add column if not exists last_serviced_at timestamptz,
+  add column if not exists last_service_date date,
   add column if not exists created_at timestamptz default now();
 
 alter table public.service_requests

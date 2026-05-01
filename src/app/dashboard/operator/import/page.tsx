@@ -11,6 +11,7 @@ type ImportRow = {
   accountName: string
   projectName: string
   address: string
+  reportDate: string | null
   lat?: number
   lng?: number
   operation: string
@@ -90,6 +91,21 @@ function deterministicAddress(accountName: string, projectName: string, binNumbe
   return FLORIDA_DEMO_ADDRESSES[score % FLORIDA_DEMO_ADDRESSES.length]
 }
 
+function reportBaseDate(fileName: string) {
+  const match = fileName.match(/(\d{1,2})[.\-_](\d{1,2})[.\-_](\d{4})/)
+  if (!match) return null
+  const [, month, day, year] = match
+  return { month: Number(month), day: Number(day), year: Number(year) }
+}
+
+function sheetReportDate(fileName: string, sheetName: string) {
+  const base = reportBaseDate(fileName)
+  const day = Number(sheetName.match(/\d{1,2}/)?.[0])
+  if (!base || !day || day < 1 || day > 31) return null
+  const date = new Date(Date.UTC(base.year, base.month - 1, day))
+  return date.toISOString().slice(0, 10)
+}
+
 function detectOperation(row: Record<string, unknown>) {
   const pairs = [
     ['deliver', 'delivery'],
@@ -157,6 +173,7 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
           const binIndex = headerMap.bin
           const accountIndex = headerMap.accountname ?? headerMap.customername
           const projectIndex = headerMap.projectname ?? headerMap.projectnameaddress
+          const addressIndex = headerMap.address ?? headerMap.jobsiteaddress ?? headerMap.serviceaddress ?? headerMap.projectaddress ?? headerMap.location
           if (binIndex === undefined || accountIndex === undefined || projectIndex === undefined) return
 
           rows.slice(headerIndex + 1).forEach((values, index) => {
@@ -167,12 +184,14 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
 
             const row: Record<string, unknown> = Object.fromEntries(headers.map((header, idx) => [header, values[idx]]))
             const operation = detectOperation(row)
-            const projectAddress = isAddressLike(projectName) ? projectName : ''
+            const explicitAddress = addressIndex !== undefined ? clean(values[addressIndex]) : ''
+            const projectAddress = isAddressLike(explicitAddress) ? explicitAddress : isAddressLike(projectName) ? projectName : ''
             const projectKey = `${accountName}|${projectName}`.toLowerCase()
             if (projectAddress) addressByProject.set(projectKey, projectAddress)
             if (!addressByProject.has(projectKey)) addressByProject.set(projectKey, deterministicAddress(accountName, projectName, binNumber))
             const address = addressByProject.get(projectKey) || projectAddress
             const coords = FLORIDA_DEMO_COORDS[address]
+            const reportDate = sheetReportDate(file.name, sheetName)
 
             parsed.push({
               id: `${sheetName}-${index}-${binNumber}`,
@@ -181,6 +200,7 @@ function parseWorkbook(file: File): Promise<ImportRow[]> {
               accountName,
               projectName,
               address,
+              reportDate,
               lat: coords?.lat,
               lng: coords?.lng,
               operation,
@@ -268,8 +288,9 @@ export default function BulkImportPage() {
       const checks = await Promise.all([
         supabase.from('clients').select('id,company_name').limit(1),
         supabase.from('jobsites').select('id,address').limit(1),
-        supabase.from('equipment').select('id,bin_number,status,location,jobsite_id').limit(1),
-        supabase.from('service_requests').select('id,service_type,jobsite_address,preferred_date').limit(1),
+        supabase.from('equipment').select('id,bin_number,container_number,status,location,jobsite_id').limit(1),
+        supabase.from('service_requests').select('id,service_type,jobsite_address,preferred_date,bin_number').limit(1),
+        supabase.from('daily_operation_events').select('id,event_date,bin_number').limit(1),
       ])
       const failedCheck = checks.find(check => check.error)
       if (failedCheck?.error) {
@@ -329,7 +350,7 @@ export default function BulkImportPage() {
       }
 
       for (const row of equipment) {
-        const latest = rows.find(item => item.binNumber === row.binNumber) || row
+        const latest = [...rows].reverse().find(item => item.binNumber === row.binNumber) || row
         const clientId = clientIdByName.get(latest.accountName.toLowerCase()) || null
         const jobsiteId = jobsiteIdByKey.get(`${latest.accountName}|${latest.projectName}|${latest.address}`.toLowerCase()) || null
         const payload = {
@@ -360,14 +381,17 @@ export default function BulkImportPage() {
       }
 
       for (const row of serviceRows) {
-        const { data: existingExact } = await supabase
+        let existingQuery = supabase
           .from('service_requests')
           .select('id')
           .eq('bin_number', row.binNumber)
           .eq('jobsite_address', row.address)
-          .limit(1)
+        if (row.reportDate) existingQuery = existingQuery.eq('preferred_date', row.reportDate)
+        const { data: existingExact } = await existingQuery.limit(1)
         const { data: existingByProject } = existingExact?.[0]?.id
           ? { data: existingExact }
+          : row.reportDate
+            ? { data: [] }
           : await supabase
             .from('service_requests')
             .select('id')
@@ -387,13 +411,36 @@ export default function BulkImportPage() {
           service_type: serviceType(row.operation),
           jobsite_address: row.address,
           service_address: row.address,
-          preferred_date: null,
+          preferred_date: row.reportDate,
+          scheduled_date: row.reportDate,
           bin_number: row.binNumber,
           priority: row.operation === 'water_removal' ? 'high' : 'normal',
-          notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}${row.comments ? `\n${row.comments}` : ''}`,
+          notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}\nSource: ${fileName || 'bulk import'} sheet ${row.sheet}${row.comments ? `\n${row.comments}` : ''}`,
         })
         if (err) notes.push(`Service ${row.binNumber}: ${err.message}`)
         else nextStats.servicesCreated++
+      }
+
+      const dailyRows = rows.filter(row => row.reportDate).map(row => ({
+        event_date: row.reportDate,
+        source_file: fileName || 'bulk import',
+        source_sheet: row.sheet,
+        client_name: row.accountName,
+        project_name: row.projectName,
+        bin_number: row.binNumber,
+        operation: row.operation,
+        bin_type: row.binType,
+        comments: row.comments || null,
+        audit_hash: `${row.reportDate}|${row.sheet}|${row.binNumber}|${row.accountName}|${row.projectName}|${row.operation}`,
+      }))
+      if (dailyRows.length > 0) {
+        const sourceFile = fileName || 'bulk import'
+        const dailyDates = Array.from(new Set(dailyRows.map(row => row.event_date).filter(Boolean)))
+        if (dailyDates.length > 0) {
+          await supabase.from('daily_operation_events').delete().eq('source_file', sourceFile).in('event_date', dailyDates)
+        }
+        const { error: dailyError } = await supabase.from('daily_operation_events').insert(dailyRows)
+        if (dailyError) notes.push(`Daily report trace: ${dailyError.message}`)
       }
 
       setReport(notes)
