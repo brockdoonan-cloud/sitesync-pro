@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useLanguage } from '@/lib/i18n'
 
 type ServiceRequest = {
   id: string
@@ -17,13 +18,6 @@ type ServiceRequest = {
   service_type?: string | null
   preferred_date?: string | null
 }
-
-const statusSteps = [
-  { key: 'pending', label: 'Pending' },
-  { key: 'scheduled', label: 'Scheduled' },
-  { key: 'en_route', label: 'En Route' },
-  { key: 'completed', label: 'Completed' },
-]
 
 const activeStatuses = ['pending', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'in_progress', 'completed']
 
@@ -41,9 +35,9 @@ function requestAddress(request: ServiceRequest) {
   return [request.address || request.jobsite_address, request.city, request.zip].filter(Boolean).join(', ')
 }
 
-function requestDate(request: ServiceRequest) {
+function requestDate(request: ServiceRequest, fallback: string) {
   const value = request.scheduled_date || request.preferred_date || request.created_at
-  if (!value) return 'Date pending'
+  if (!value) return fallback
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
@@ -51,13 +45,13 @@ function mapUrl(address: string) {
   return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`
 }
 
-function ProgressTracker({ status }: { status: string }) {
+function ProgressTracker({ status, steps }: { status: string; steps: { key: string; label: string }[] }) {
   const normalized = normalizeStatus(status)
-  const currentIndex = Math.max(0, statusSteps.findIndex(step => step.key === normalized))
+  const currentIndex = Math.max(0, steps.findIndex(step => step.key === normalized))
 
   return (
     <div className="grid grid-cols-4 gap-2">
-      {statusSteps.map((step, index) => {
+      {steps.map((step, index) => {
         const isDone = index <= currentIndex
         return (
           <div key={step.key} className="space-y-2">
@@ -71,6 +65,7 @@ function ProgressTracker({ status }: { status: string }) {
 }
 
 export default function TrackingPage() {
+  const { t } = useLanguage()
   const [requests, setRequests] = useState<ServiceRequest[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -88,7 +83,7 @@ export default function TrackingPage() {
 
       if (userError || !user) {
         if (isMounted) {
-          setError('Please sign in to view live tracking.')
+          setError(t('signInTracking'))
           setLoading(false)
         }
         return
@@ -120,20 +115,27 @@ export default function TrackingPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [t])
 
   const selectedRequest = useMemo(
     () => requests.find(request => request.id === selectedId) || requests[0],
     [requests, selectedId]
   )
   const selectedAddress = selectedRequest ? requestAddress(selectedRequest) : ''
+  const statusSteps = [
+    { key: 'pending', label: t('pending') },
+    { key: 'scheduled', label: t('scheduled') },
+    { key: 'en_route', label: t('enRoute') },
+    { key: 'completed', label: t('completed') },
+  ]
+  const statusLabel = (status?: string | null) => statusSteps.find(step => step.key === normalizeStatus(status))?.label || titleize(status)
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium uppercase tracking-wide text-sky-300">Customer Portal</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Live Tracking</h1>
-        <p className="mt-1 text-sm text-slate-400">Follow active service requests from pending to completion.</p>
+        <p className="text-sm font-medium uppercase tracking-wide text-sky-300">{t('customerPortal')}</p>
+        <h1 className="mt-1 text-2xl font-bold text-white">{t('liveTracking')}</h1>
+        <p className="mt-1 text-sm text-slate-400">{t('trackingSubtitle')}</p>
       </div>
 
       {error && (
@@ -144,13 +146,13 @@ export default function TrackingPage() {
 
       {loading ? (
         <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-6 text-slate-300">
-          Loading your active requests...
+          {t('loadingRequests')}
         </div>
       ) : requests.length === 0 ? (
         <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-8 text-center">
-          <h2 className="text-lg font-semibold text-white">No active service requests</h2>
+          <h2 className="text-lg font-semibold text-white">{t('noActiveRequests')}</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
-            When a delivery, swap, pickup, or other request is scheduled, live status and location details will appear here.
+            {t('noActiveRequestsCopy')}
           </p>
         </div>
       ) : (
@@ -177,20 +179,20 @@ export default function TrackingPage() {
                       <h2 className="text-base font-semibold text-white">
                         {titleize(request.equipment_type || request.service_type)}
                       </h2>
-                      <p className="mt-1 text-sm text-slate-400">{address || 'Jobsite address pending'}</p>
+                      <p className="mt-1 text-sm text-slate-400">{address || t('addressPending')}</p>
                     </div>
                     <span className="inline-flex w-fit rounded-full border border-sky-400/40 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
-                      {titleize(status)}
+                      {statusLabel(status)}
                     </span>
                   </div>
 
                   <div className="mt-4">
-                    <ProgressTracker status={status} />
+                    <ProgressTracker status={status} steps={statusSteps} />
                   </div>
 
                   <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
-                    <div>Scheduled: <span className="text-slate-200">{requestDate(request)}</span></div>
-                    {request.notes && <div>Notes: <span className="text-slate-200">{request.notes}</span></div>}
+                    <div>{t('scheduledLabel')}: <span className="text-slate-200">{requestDate(request, t('datePending'))}</span></div>
+                    {request.notes && <div>{t('notesLabel')}: <span className="text-slate-200">{request.notes}</span></div>}
                   </div>
                 </button>
               )
@@ -200,8 +202,8 @@ export default function TrackingPage() {
           <aside className="space-y-4">
             <div className="overflow-hidden rounded-lg border border-slate-700/50 bg-slate-800/40">
               <div className="border-b border-slate-700/50 px-4 py-3">
-                <h2 className="font-semibold text-white">Jobsite Map</h2>
-                <p className="mt-1 text-sm text-slate-400">{selectedAddress || 'Select a request with an address.'}</p>
+                <h2 className="font-semibold text-white">{t('jobsiteMap')}</h2>
+                <p className="mt-1 text-sm text-slate-400">{selectedAddress || t('selectAddress')}</p>
               </div>
               {selectedAddress ? (
                 <iframe
@@ -213,26 +215,26 @@ export default function TrackingPage() {
                 />
               ) : (
                 <div className="flex h-80 items-center justify-center px-6 text-center text-sm text-slate-400">
-                  Map details will appear once a jobsite address is assigned.
+                  {t('mapDetailsPending')}
                 </div>
               )}
             </div>
 
             {selectedRequest && (
               <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-4">
-                <h2 className="font-semibold text-white">Selected Request</h2>
+                <h2 className="font-semibold text-white">{t('selectedRequest')}</h2>
                 <dl className="mt-4 space-y-3 text-sm">
                   <div className="flex justify-between gap-4">
-                    <dt className="text-slate-400">Status</dt>
-                    <dd className="font-medium text-white">{titleize(normalizeStatus(selectedRequest.status))}</dd>
+                    <dt className="text-slate-400">{t('status')}</dt>
+                    <dd className="font-medium text-white">{statusLabel(selectedRequest.status)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-slate-400">Equipment</dt>
+                    <dt className="text-slate-400">{t('equipment')}</dt>
                     <dd className="font-medium text-white">{titleize(selectedRequest.equipment_type || selectedRequest.service_type)}</dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-slate-400">Date</dt>
-                    <dd className="font-medium text-white">{requestDate(selectedRequest)}</dd>
+                    <dt className="text-slate-400">{t('date')}</dt>
+                    <dd className="font-medium text-white">{requestDate(selectedRequest, t('datePending'))}</dd>
                   </div>
                 </dl>
               </div>

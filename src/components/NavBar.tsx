@@ -21,18 +21,18 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   }
 
   const opLinks = [
-    { href: '/dashboard/operator', label: 'Overview' },
-    { href: '/dashboard/operator/onboarding', label: 'Setup' },
-    { href: '/dashboard/operator/import', label: 'Import' },
-    { href: '/dashboard/operator/leads', label: 'Leads' },
-    { href: '/dashboard/operator/requests', label: 'Requests' },
-    { href: '/dashboard/operator/jobs', label: 'Jobs' },
-    { href: '/dashboard/operator/routes', label: 'Routes' },
-    { href: '/dashboard/operator/map', label: 'Map' },
-    { href: '/dashboard/operator/equipment', label: 'Equipment' },
-    { href: '/dashboard/operator/trucks', label: 'Trucks' },
-    { href: '/dashboard/operator/clients', label: 'Clients' },
-    { href: '/dashboard/operator/billing', label: 'Billing' },
+    { href: '/dashboard/operator', label: t('overview') },
+    { href: '/dashboard/operator/onboarding', label: t('setup') },
+    { href: '/dashboard/operator/import', label: t('import') },
+    { href: '/dashboard/operator/leads', label: t('leads') },
+    { href: '/dashboard/operator/requests', label: t('requests') },
+    { href: '/dashboard/operator/jobs', label: t('jobs') },
+    { href: '/dashboard/operator/routes', label: t('routes') },
+    { href: '/dashboard/operator/map', label: t('map') },
+    { href: '/dashboard/operator/equipment', label: t('equipment') },
+    { href: '/dashboard/operator/trucks', label: t('trucks') },
+    { href: '/dashboard/operator/clients', label: t('clients') },
+    { href: '/dashboard/operator/billing', label: t('billing') },
   ]
   const custLinks = [
     { href: '/dashboard/customer', label: t('overview') },

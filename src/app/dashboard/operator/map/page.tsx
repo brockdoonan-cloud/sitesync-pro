@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useLanguage } from '@/lib/i18n'
 import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Jobsite = {
@@ -235,6 +236,7 @@ function FallbackEquipmentMap({
   selected?: MapSite
   onSelect: (id: string) => void
 }) {
+  const { t } = useLanguage()
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMap = useRef<LeafletMap | null>(null)
   const markerLayer = useRef<{ clearLayers: () => void; addLayer: (marker: LeafletMarker) => void } | null>(null)
@@ -314,7 +316,7 @@ function FallbackEquipmentMap({
           iconAnchor: [17, 28],
         })
         const marker = L.marker([position.lat, position.lng], { icon })
-          .bindPopup(`<strong>Bin #${item.bin_number || item.id.slice(0, 6)}</strong><br/>${site.address || 'Jobsite'}<br/>${swap ? 'Swap needed' : item.status || 'OK'}`)
+          .bindPopup(`<strong>${t('binNumber')} ${item.bin_number || item.id.slice(0, 6)}</strong><br/>${site.address || t('jobsiteMap')}<br/>${swap ? t('swapNeeded') : item.status || 'OK'}`)
           .on('click', () => onSelect(site.id))
         layer.addLayer(marker)
         bounds.push([position.lat, position.lng])
@@ -328,7 +330,7 @@ function FallbackEquipmentMap({
     return () => {
       cancelled = true
     }
-  }, [onSelect, selected, visibleBinMarkers])
+  }, [onSelect, selected, t, visibleBinMarkers])
 
   useEffect(() => {
     const timer = window.setTimeout(() => leafletMap.current?.invalidateSize(), 100)
@@ -351,6 +353,7 @@ function GoogleEquipmentMap({
   selected?: MapSite
   onSelect: (id: string) => void
 }) {
+  const { t } = useLanguage()
   const mapRef = useRef<HTMLDivElement>(null)
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -406,7 +409,7 @@ function GoogleEquipmentMap({
           const marker = new google.maps.Marker({
             map,
             position: itemPosition,
-            title: `Bin #${item.bin_number || 'unassigned'} - ${site.address || 'Jobsite'}`,
+            title: `${t('binNumber')} ${item.bin_number || t('unassigned')} - ${site.address || t('jobsiteMap')}`,
             label: { text: item.bin_number ? markerLabel(item) : String(site.equipment.length), color: '#ffffff', fontWeight: '700', fontSize: '11px' },
             icon: {
               path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
@@ -419,7 +422,7 @@ function GoogleEquipmentMap({
             },
           })
           const info = new google.maps.InfoWindow({
-            content: `<div style="font-family:system-ui;min-width:220px"><strong>Bin #${item.bin_number || 'Unassigned'}</strong><br/>${site.address || 'Jobsite'}<br/>Status: ${swap ? 'Swap needed' : item.status || 'unknown'}<br/>Location: ${item.location || site.address || 'On site'}</div>`,
+            content: `<div style="font-family:system-ui;min-width:220px"><strong>${t('binNumber')} ${item.bin_number || t('unassigned')}</strong><br/>${site.address || t('jobsiteMap')}<br/>${t('status')}: ${swap ? t('swapNeeded') : item.status || t('unknown')}<br/>${t('location')}: ${item.location || site.address || t('onSite')}</div>`,
           })
           marker.addListener('click', () => {
             onSelect(site.id)
@@ -435,7 +438,7 @@ function GoogleEquipmentMap({
     return () => {
       cancelled = true
     }
-  }, [onSelect, ready, selected?.id, sites])
+  }, [onSelect, ready, selected?.id, sites, t])
 
   if (!apiKey || failed) return <FallbackEquipmentMap sites={sites} selected={selected} onSelect={onSelect} />
 
@@ -452,6 +455,7 @@ function GoogleEquipmentMap({
 }
 
 export default function MapPage() {
+  const { t } = useLanguage()
   const [sites, setSites] = useState<MapSite[]>(DEMO_SITES)
   const [selectedId, setSelectedId] = useState(DEMO_SITES[0].id)
   const [loading, setLoading] = useState(true)
@@ -500,8 +504,8 @@ export default function MapPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Equipment Map</h1>
-          <p className="text-slate-400 mt-1">See every deployed bin by jobsite and identify the ones that need swaps.</p>
+          <h1 className="text-2xl font-bold text-white">{t('equipmentMap')}</h1>
+          <p className="text-slate-400 mt-1">{t('equipmentMapSubtitle')}</p>
         </div>
         <div className="flex gap-2">
           {(['all', 'swap', 'ok'] as const).map(option => (
@@ -510,25 +514,25 @@ export default function MapPage() {
               onClick={() => setFilter(option)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${filter === option ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' : 'text-slate-400 border-slate-700/50 hover:text-white'}`}
             >
-              {option === 'all' ? 'All Sites' : option === 'swap' ? 'Needs Swap' : 'No Swap'}
+              {option === 'all' ? t('allSites') : option === 'swap' ? t('needsSwap') : t('noSwap')}
             </button>
           ))}
-          <button onClick={load} className="btn-secondary text-sm px-4 py-2">Refresh</button>
+          <button onClick={load} className="btn-secondary text-sm px-4 py-2">{t('refresh')}</button>
         </div>
       </div>
 
       {usingDemo && (
         <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-300">
-          Demo mode is showing sample Orlando jobsites because live jobsite rows were not returned. Real Supabase data will replace this automatically.
+          {t('demoModeMap')}
         </div>
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Jobsites', value: sites.length, className: 'bg-slate-700/40 text-white border-slate-600/40' },
-          { label: 'Equipment On Sites', value: allEquipment.length, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
-          { label: 'Needs Swap', value: swapNeeded.length, className: 'bg-red-500/10 text-red-400 border-red-500/20' },
-          { label: 'Okay For Now', value: Math.max(0, allEquipment.length - swapNeeded.length), className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+          { label: t('jobsites'), value: sites.length, className: 'bg-slate-700/40 text-white border-slate-600/40' },
+          { label: t('equipmentOnSites'), value: allEquipment.length, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
+          { label: t('needsSwap'), value: swapNeeded.length, className: 'bg-red-500/10 text-red-400 border-red-500/20' },
+          { label: t('okayForNow'), value: Math.max(0, allEquipment.length - swapNeeded.length), className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
         ].map(stat => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.className}`}>
             <div className="text-2xl font-bold">{stat.value}</div>
@@ -548,19 +552,19 @@ export default function MapPage() {
           <div className="card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-white">{selected?.address || 'Select a jobsite'}</h2>
-                <p className="text-slate-400 text-sm mt-1">{selected?.address || 'No address on file'}</p>
+                <h2 className="text-lg font-semibold text-white">{selected?.address || t('selectJobsite')}</h2>
+                <p className="text-slate-400 text-sm mt-1">{selected?.address || t('noAddress')}</p>
               </div>
-              {selected && <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(selected.status)}`}>{selected.status || 'unknown'}</span>}
+              {selected && <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(selected.status)}`}>{selected.status || t('unknown')}</span>}
             </div>
             {selected && (
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-slate-700/40 p-3">
-                  <div className="text-slate-500 text-xs">On Site</div>
+                  <div className="text-slate-500 text-xs">{t('onSite')}</div>
                   <div className="text-white text-2xl font-bold">{selected.equipment.length}</div>
                 </div>
                 <div className="rounded-xl bg-red-500/10 p-3">
-                  <div className="text-slate-500 text-xs">Needs Swap</div>
+                  <div className="text-slate-500 text-xs">{t('needsSwap')}</div>
                   <div className="text-red-400 text-2xl font-bold">{siteSwapCount(selected)}</div>
                 </div>
               </div>
@@ -568,46 +572,46 @@ export default function MapPage() {
           </div>
 
           <div className="card">
-            <h3 className="font-semibold text-white mb-3">Equipment at selected site</h3>
+            <h3 className="font-semibold text-white mb-3">{t('equipmentAtSelectedSite')}</h3>
             {selected?.equipment.length ? (
               <div className="space-y-2">
                 {selected.equipment.map(item => (
                   <div key={item.id} className="rounded-lg border border-slate-700/50 bg-slate-700/20 px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-medium text-white">Bin #{item.bin_number || item.id.slice(0, 6)}</div>
-                        <div className="text-xs text-slate-500">{item.location || selected.address || 'On site'}</div>
+                        <div className="font-medium text-white">{t('binNumber')} {item.bin_number || item.id.slice(0, 6)}</div>
+                        <div className="text-xs text-slate-500">{item.location || selected.address || t('onSite')}</div>
                       </div>
-                      <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(item.status)}`}>{needsSwap(item) ? 'Swap needed' : item.status || 'unknown'}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(item.status)}`}>{needsSwap(item) ? t('swapNeeded') : item.status || t('unknown')}</span>
                     </div>
-                    {item.last_serviced_at && <div className="text-xs text-slate-500 mt-2">Last serviced {new Date(item.last_serviced_at).toLocaleDateString()}</div>}
+                    {item.last_serviced_at && <div className="text-xs text-slate-500 mt-2">{t('lastServiced')} {new Date(item.last_serviced_at).toLocaleDateString()}</div>}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-slate-400 text-sm">No equipment linked to this site yet.</p>
+              <p className="text-slate-400 text-sm">{t('noEquipmentLinked')}</p>
             )}
           </div>
 
           <div className="card">
-            <h3 className="font-semibold text-white mb-3">Swap queue</h3>
+            <h3 className="font-semibold text-white mb-3">{t('swapQueue')}</h3>
             {swapNeeded.length > 0 ? (
               <div className="space-y-2">
                 {sites.flatMap(site => site.equipment.filter(needsSwap).map(item => ({ site, item }))).map(({ site, item }) => (
                   <button key={item.id} onClick={() => setSelectedId(site.id)} className="w-full text-left rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 hover:border-red-500/40 transition-colors">
-                    <div className="text-sm font-medium text-white">Bin #{item.bin_number || item.id.slice(0, 6)}</div>
-                    <div className="text-xs text-red-300">{site.address || 'Jobsite'} needs swap</div>
+                    <div className="text-sm font-medium text-white">{t('binNumber')} {item.bin_number || item.id.slice(0, 6)}</div>
+                    <div className="text-xs text-red-300">{site.address || t('jobsiteMap')} {t('needsSwapSentence')}</div>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="text-slate-400 text-sm">No swaps needed in the current view.</p>
+              <p className="text-slate-400 text-sm">{t('noSwapsNeeded')}</p>
             )}
           </div>
         </div>
       </div>
 
-      {loading && <p className="text-slate-500 text-sm">Refreshing map data...</p>}
+      {loading && <p className="text-slate-500 text-sm">{t('refreshingMap')}</p>}
     </div>
   )
 }
