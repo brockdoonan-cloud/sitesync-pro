@@ -46,8 +46,8 @@ function timeAgo(iso?: string) {
 }
 
 export default function TrucksPage() {
-  const [trucks, setTrucks] = useState<Truck[]>([])
-  const [loading, setLoading] = useState(true)
+  const [trucks, setTrucks] = useState<Truck[]>(DEMO_TRUCKS)
+  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Truck | null>(null)
   const [tick, setTick] = useState(0)
   const mapRef = useRef<HTMLDivElement>(null)
@@ -124,9 +124,9 @@ export default function TrucksPage() {
         zoomControl: true,
       })
 
-      // OpenStreetMap tiles — free, no API key needed
+      // OpenStreetMap tiles â free, no API key needed
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: 'Â© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
       }).addTo(map)
 
@@ -212,7 +212,7 @@ export default function TrucksPage() {
 
       {trucks.some(t => t.id.startsWith('demo-')) && (
         <div className="bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm rounded-xl px-4 py-3">
-          Demo mode — simulating GPS movement. Production tracking uses driver app location pings into Supabase (trucks table: current_lat, current_lng, last_seen_at).
+          Demo mode â simulating GPS movement. Production tracking uses driver app location pings into Supabase (trucks table: current_lat, current_lng, last_seen_at).
         </div>
       )}
 
