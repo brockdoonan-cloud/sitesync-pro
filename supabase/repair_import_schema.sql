@@ -12,7 +12,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'billing_events', 'billing_import_batches')
+      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'billing_events', 'billing_import_batches', 'daily_operation_events')
   loop
     execute format('drop policy if exists %I on %I.%I', policy_row.policyname, policy_row.schemaname, policy_row.tablename);
   end loop;
@@ -132,6 +132,22 @@ create table if not exists public.billing_import_batches (
   created_at timestamptz default now()
 );
 
+create table if not exists public.daily_operation_events (
+  id uuid default gen_random_uuid() primary key,
+  event_date date not null,
+  source_file text,
+  source_sheet text,
+  source_row int,
+  client_name text,
+  project_name text,
+  bin_number text,
+  operation text,
+  bin_type text,
+  comments text,
+  audit_hash text,
+  created_at timestamptz default now()
+);
+
 -- 2b) Guardrails for repeat imports.
 create unique index if not exists clients_company_name_normalized_key
   on public.clients (lower(trim(company_name)))
@@ -160,6 +176,15 @@ create index if not exists billing_events_invoice_number_idx
 create index if not exists billing_events_bin_number_idx
   on public.billing_events (bin_number);
 
+create index if not exists daily_operation_events_event_date_idx
+  on public.daily_operation_events (event_date);
+
+create index if not exists daily_operation_events_bin_number_idx
+  on public.daily_operation_events (bin_number);
+
+create index if not exists daily_operation_events_audit_hash_idx
+  on public.daily_operation_events (audit_hash);
+
 -- 3) Allow authenticated operator workflows to load operational data.
 alter table public.clients enable row level security;
 alter table public.jobsites enable row level security;
@@ -168,6 +193,7 @@ alter table public.service_requests enable row level security;
 alter table public.invoices enable row level security;
 alter table public.billing_events enable row level security;
 alter table public.billing_import_batches enable row level security;
+alter table public.daily_operation_events enable row level security;
 
 create policy "authenticated manage clients"
   on public.clients for all
@@ -201,6 +227,11 @@ create policy "authenticated manage billing events"
 
 create policy "authenticated manage billing import batches"
   on public.billing_import_batches for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage daily operation events"
+  on public.daily_operation_events for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 

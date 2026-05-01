@@ -65,7 +65,109 @@ type BillingBatch = {
   endingBalance: number
 }
 
-const today = new Date().toISOString().slice(0, 10)
+type OperationName = 'delivery' | 'pickup' | 'water_removal' | 'relocate'
+
+type OperationEvent = {
+  id: string
+  date: string
+  binNumber: string
+  clientName: string
+  projectName: string
+  operation: OperationName
+  binType: string
+  comments: string
+  sourceRow: number
+}
+
+type DailyReport = {
+  date: string
+  sourceFile: string
+  sourceSheet: string
+  totals: Record<OperationName, number>
+  events: OperationEvent[]
+}
+
+const demoDefaultDate = '2026-04-29'
+
+const DEMO_DAILY_REPORTS: DailyReport[] = [
+  {
+    date: '2026-04-01',
+    sourceFile: '4.29.2026 Orlando Report.xlsx',
+    sourceSheet: '1',
+    totals: { delivery: 4, pickup: 6, water_removal: 1, relocate: 0 },
+    events: [
+      { id: 'demo-0401-1', date: '2026-04-01', binNumber: '165905', clientName: 'Titan America', projectName: 'Cocoa', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 5 },
+      { id: 'demo-0401-2', date: '2026-04-01', binNumber: '876972', clientName: 'Titan America', projectName: 'Cocoa', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 6 },
+      { id: 'demo-0401-3', date: '2026-04-01', binNumber: '154761', clientName: 'Castle', projectName: 'Project Macaw', operation: 'pickup', binType: 'washout', comments: 'standby30', sourceRow: 7 },
+      { id: 'demo-0401-4', date: '2026-04-01', binNumber: '32971', clientName: 'Baker', projectName: 'Project Neptune', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 8 },
+      { id: 'demo-0401-5', date: '2026-04-01', binNumber: '41848', clientName: 'Baker', projectName: 'Project Neptune', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 9 },
+      { id: 'demo-0401-6', date: '2026-04-01', binNumber: 'PW114', clientName: 'PCC', projectName: 'AAA HS', operation: 'water_removal', binType: 'washout', comments: '', sourceRow: 15 },
+    ],
+  },
+  {
+    date: '2026-04-02',
+    sourceFile: '4.29.2026 Orlando Report.xlsx',
+    sourceSheet: '2',
+    totals: { delivery: 3, pickup: 3, water_removal: 0, relocate: 0 },
+    events: [
+      { id: 'demo-0402-1', date: '2026-04-02', binNumber: '160887', clientName: 'Liberty Concrete & Forming', projectName: 'Lawnwood Hospital', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 5 },
+      { id: 'demo-0402-2', date: '2026-04-02', binNumber: '876917', clientName: 'WMSS', projectName: 'Walmart 7039', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 6 },
+      { id: 'demo-0402-3', date: '2026-04-02', binNumber: '41848', clientName: 'WM', projectName: 'HGR-Mater Academy', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 7 },
+      { id: 'demo-0402-4', date: '2026-04-02', binNumber: '60679', clientName: 'WM', projectName: 'HGR-Mater Academy', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 8 },
+      { id: 'demo-0402-5', date: '2026-04-02', binNumber: '143287', clientName: 'WM', projectName: 'DHI-Nona West', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 9 },
+      { id: 'demo-0402-6', date: '2026-04-02', binNumber: '140713', clientName: 'WM', projectName: 'DHI-Nona West', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 10 },
+    ],
+  },
+  {
+    date: '2026-04-03',
+    sourceFile: '4.29.2026 Orlando Report.xlsx',
+    sourceSheet: '3',
+    totals: { delivery: 3, pickup: 2, water_removal: 1, relocate: 0 },
+    events: [
+      { id: 'demo-0403-1', date: '2026-04-03', binNumber: '140654', clientName: 'Castle', projectName: 'Winter Park Playhouse', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 5 },
+      { id: 'demo-0403-2', date: '2026-04-03', binNumber: '32457', clientName: 'Sterling Concrete', projectName: 'Sterling HQ', operation: 'water_removal', binType: 'washout', comments: '', sourceRow: 6 },
+      { id: 'demo-0403-3', date: '2026-04-03', binNumber: '154761', clientName: 'Castle', projectName: 'Universal Project 931', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 7 },
+      { id: 'demo-0403-4', date: '2026-04-03', binNumber: '154714', clientName: 'Jones', projectName: 'Reserve of Twin Lakes', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 8 },
+      { id: 'demo-0403-5', date: '2026-04-03', binNumber: '153596', clientName: 'Jones', projectName: 'Reserve of Twin Lakes', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 9 },
+      { id: 'demo-0403-6', date: '2026-04-03', binNumber: '60677', clientName: 'Jones', projectName: 'Reserve of Twin Lakes', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 10 },
+    ],
+  },
+  {
+    date: '2026-04-28',
+    sourceFile: '4.29.2026 Orlando Report.xlsx',
+    sourceSheet: '28',
+    totals: { delivery: 10, pickup: 8, water_removal: 1, relocate: 0 },
+    events: [
+      { id: 'demo-0428-1', date: '2026-04-28', binNumber: '163041', clientName: 'Baker', projectName: 'Project RO', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 5 },
+      { id: 'demo-0428-2', date: '2026-04-28', binNumber: '61529', clientName: 'Baker', projectName: 'Project RO', operation: 'pickup', binType: 'washout', comments: 'stand by 1hr', sourceRow: 6 },
+      { id: 'demo-0428-3', date: '2026-04-28', binNumber: '41902', clientName: 'Brasfield & Gorrie', projectName: 'Project Ray', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 7 },
+      { id: 'demo-0428-4', date: '2026-04-28', binNumber: '165736', clientName: 'Brasfield & Gorrie', projectName: 'Project Ray', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 8 },
+      { id: 'demo-0428-5', date: '2026-04-28', binNumber: 'PW109', clientName: 'PCC', projectName: 'Sumter Govt SC', operation: 'water_removal', binType: 'washout', comments: '', sourceRow: 19 },
+      { id: 'demo-0428-6', date: '2026-04-28', binNumber: '60711', clientName: 'WM', projectName: 'DHI Nona West', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 22 },
+      { id: 'demo-0428-7', date: '2026-04-28', binNumber: '163689', clientName: 'WM', projectName: 'DHI Nona West', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 23 },
+    ],
+  },
+  {
+    date: '2026-04-29',
+    sourceFile: '4.29.2026 Orlando Report.xlsx',
+    sourceSheet: '29',
+    totals: { delivery: 14, pickup: 15, water_removal: 0, relocate: 0 },
+    events: [
+      { id: 'demo-0429-1', date: '2026-04-29', binNumber: '61506', clientName: 'Baker', projectName: 'Project Neptune', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 5 },
+      { id: 'demo-0429-2', date: '2026-04-29', binNumber: '41847', clientName: 'Baker', projectName: 'Project Neptune', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 6 },
+      { id: 'demo-0429-3', date: '2026-04-29', binNumber: '154761', clientName: 'Jones', projectName: 'Reserve of Twin Lakes', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 7 },
+      { id: 'demo-0429-4', date: '2026-04-29', binNumber: '153596', clientName: 'Jones', projectName: 'Reserve of Twin Lakes', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 8 },
+      { id: 'demo-0429-5', date: '2026-04-29', binNumber: '61529', clientName: 'Brasfield & Gorrie', projectName: 'AHC Tower H', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 9 },
+      { id: 'demo-0429-6', date: '2026-04-29', binNumber: '143288', clientName: 'Brasfield & Gorrie', projectName: 'AHC Tower H', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 10 },
+      { id: 'demo-0429-7', date: '2026-04-29', binNumber: '876972', clientName: 'PCL', projectName: 'Project LaBrea', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 11 },
+      { id: 'demo-0429-8', date: '2026-04-29', binNumber: '61489', clientName: 'PCL', projectName: 'Project LaBrea', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 12 },
+      { id: 'demo-0429-9', date: '2026-04-29', binNumber: '143290', clientName: 'WM', projectName: 'HGR Mater Academy', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 15 },
+      { id: 'demo-0429-10', date: '2026-04-29', binNumber: '41848', clientName: 'WM', projectName: 'HGR Mater Academy', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 16 },
+      { id: 'demo-0429-11', date: '2026-04-29', binNumber: '876920', clientName: 'The Conlan Co', projectName: 'Beachline 2 & 3', operation: 'delivery', binType: 'washout', comments: '', sourceRow: 30 },
+      { id: 'demo-0429-12', date: '2026-04-29', binNumber: '121872', clientName: 'The Conlan Co', projectName: 'Beachline 2 & 3', operation: 'pickup', binType: 'washout', comments: '', sourceRow: 33 },
+    ],
+  },
+]
 
 function money(value: unknown) {
   return Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -111,6 +213,27 @@ function hashLine(line: BillingLine) {
   let hash = 0
   for (const char of text) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0
   return `SSP-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}`
+}
+
+function operationLabel(operation: OperationName) {
+  if (operation === 'delivery') return 'Drop / Delivery'
+  if (operation === 'pickup') return 'Pickup'
+  if (operation === 'water_removal') return 'Water Removal'
+  return 'Relocate'
+}
+
+function operationClass(operation: OperationName) {
+  if (operation === 'delivery') return 'bg-green-500/10 text-green-400 border-green-500/30'
+  if (operation === 'pickup') return 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+  if (operation === 'water_removal') return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+  return 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+}
+
+function hashOperation(event: OperationEvent) {
+  let hash = 0
+  const text = [event.date, event.binNumber, event.clientName, event.projectName, event.operation, event.sourceRow].join('|')
+  for (const char of text) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0
+  return `OPS-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}`
 }
 
 function parseBillingWorkbook(file: File): Promise<BillingBatch> {
@@ -209,7 +332,7 @@ function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
 
 export default function BillingPage() {
   const supabase = useMemo(() => createClient(), [])
-  const [selectedDate, setSelectedDate] = useState(today)
+  const [selectedDate, setSelectedDate] = useState(demoDefaultDate)
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [services, setServices] = useState<ServiceRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -217,6 +340,7 @@ export default function BillingPage() {
   const [message, setMessage] = useState('')
   const [batch, setBatch] = useState<BillingBatch | null>(null)
   const [saving, setSaving] = useState(false)
+  const [savingDailyReport, setSavingDailyReport] = useState(false)
   const [query, setQuery] = useState('')
 
   const load = useCallback(async () => {
@@ -253,6 +377,24 @@ export default function BillingPage() {
     })
   }, [query, selectedDate, services])
 
+  const demoReport = useMemo(() => DEMO_DAILY_REPORTS.find(report => report.date === selectedDate), [selectedDate])
+  const demoEvents = useMemo(() => demoReport?.events || [], [demoReport])
+  const filteredDemoEvents = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return demoEvents.filter(event => {
+      const text = [event.binNumber, event.clientName, event.projectName, event.operation, event.comments].join(' ').toLowerCase()
+      return !needle || text.includes(needle)
+    })
+  }, [demoEvents, query])
+  const realServiceBinSet = useMemo(() => new Set(visibleServices.flatMap(service => [service.bin_number, service.notes?.match(/\b\d{4,}\b/)?.[0]].filter(Boolean) as string[])), [visibleServices])
+  const unmatchedDailyEvents = filteredDemoEvents.filter(event => realServiceBinSet.size > 0 && !realServiceBinSet.has(event.binNumber))
+  const operationTotals = demoReport?.totals || {
+    delivery: visibleServices.filter(service => service.service_type === 'delivery').length,
+    pickup: visibleServices.filter(service => service.service_type === 'removal' || service.service_type === 'pickup').length,
+    water_removal: visibleServices.filter(service => service.service_type === 'pump_out' || service.service_type === 'water_removal').length,
+    relocate: visibleServices.filter(service => service.service_type === 'relocate').length,
+  }
+
   const totals = useMemo(() => {
     const activeRows = invoices.filter(invoice => !['paid', 'void', 'cancelled'].includes(invoice.status || ''))
     return {
@@ -260,8 +402,9 @@ export default function BillingPage() {
       activeBalance: activeRows.reduce((sum, invoice) => sum + Number(invoice.balance || invoice.total || invoice.amount || 0), 0),
       paidTotal: invoices.filter(invoice => invoice.status === 'paid').reduce((sum, invoice) => sum + Number(invoice.total || invoice.amount || 0), 0),
       openCount: invoices.filter(invoice => invoice.status !== 'paid').length,
+      dailyOps: operationTotals.delivery + operationTotals.pickup + operationTotals.water_removal + operationTotals.relocate,
     }
-  }, [invoices, visibleInvoices])
+  }, [invoices, operationTotals.delivery, operationTotals.pickup, operationTotals.relocate, operationTotals.water_removal, visibleInvoices])
 
   const billingLinesForDay = useMemo(() => (batch?.lines || []).filter(line => line.date === selectedDate || !selectedDate), [batch, selectedDate])
   const unmatchedBillingLines = useMemo(() => billingLinesForDay.filter(line => {
@@ -350,6 +493,41 @@ export default function BillingPage() {
     }
   }
 
+  const saveDailyReport = async () => {
+    if (!demoReport || demoEvents.length === 0) return
+    setSavingDailyReport(true)
+    setError('')
+    setMessage('')
+    try {
+      await supabase
+        .from('daily_operation_events')
+        .delete()
+        .eq('event_date', demoReport.date)
+        .eq('source_file', demoReport.sourceFile)
+
+      const payload = demoEvents.map(event => ({
+        event_date: event.date,
+        source_file: demoReport.sourceFile,
+        source_sheet: demoReport.sourceSheet,
+        source_row: event.sourceRow,
+        client_name: event.clientName,
+        project_name: event.projectName,
+        bin_number: event.binNumber,
+        operation: event.operation,
+        bin_type: event.binType,
+        comments: event.comments || null,
+        audit_hash: hashOperation(event),
+      }))
+      const { error: saveError } = await supabase.from('daily_operation_events').insert(payload)
+      if (saveError) throw saveError
+      setMessage(`Saved ${payload.length} daily operation rows for ${demoReport.date}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save daily report. Run the updated Supabase repair SQL first.')
+    } finally {
+      setSavingDailyReport(false)
+    }
+  }
+
   const exportAuditDay = () => {
     const invoiceRows = visibleInvoices.map(invoice => ({
       type: 'invoice',
@@ -378,7 +556,24 @@ export default function BillingPage() {
       address: service.jobsite_address || service.service_address,
       notes: service.notes,
     }))
-    downloadCsv(`sitesync-audit-${selectedDate}.csv`, [...invoiceRows, ...serviceRows])
+    const operationRows = filteredDemoEvents.map(event => ({
+      type: 'daily_operation',
+      date: event.date,
+      number: event.binNumber,
+      client: event.clientName,
+      project: event.projectName,
+      operation: event.operation,
+      amount: '',
+      balance: '',
+      status: operationLabel(event.operation),
+      audit_hash: hashOperation(event),
+      source_file: demoReport?.sourceFile,
+      source_row: event.sourceRow,
+      bin: event.binNumber,
+      address: event.projectName,
+      notes: event.comments,
+    }))
+    downloadCsv(`sitesync-audit-${selectedDate}.csv`, [...invoiceRows, ...serviceRows, ...operationRows])
   }
 
   return (
@@ -400,6 +595,27 @@ export default function BillingPage() {
         Audit note: SiteSync can preserve source files, line-level hashes, invoice totals, and service traces. Final tax treatment, retention policy, and IRS response should still be reviewed by your CPA.
       </div>
 
+      <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">Five-day demo daily reports</div>
+            <div className="text-xs text-slate-500">Loaded from the Orlando report workbook for fast audit/demo review.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {DEMO_DAILY_REPORTS.map(report => (
+              <button
+                key={report.date}
+                type="button"
+                onClick={() => setSelectedDate(report.date)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${selectedDate === report.date ? 'border-sky-500/50 bg-sky-500/20 text-sky-200' : 'border-slate-700 text-slate-400 hover:text-white'}`}
+              >
+                {new Date(`${report.date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {(message || error) && (
         <div className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-red-500/30 bg-red-500/10 text-red-300' : 'border-green-500/30 bg-green-500/10 text-green-300'}`}>
           {error || message}
@@ -411,7 +627,7 @@ export default function BillingPage() {
           { label: 'Day Revenue', value: money(totals.dayRevenue), className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
           { label: 'Active Balance', value: money(totals.activeBalance), className: 'bg-red-500/10 text-red-400 border-red-500/20' },
           { label: 'Open Invoices', value: totals.openCount, className: 'bg-slate-700/40 text-white border-slate-600/40' },
-          { label: 'Service Events', value: visibleServices.length, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
+          { label: 'Daily Ops', value: totals.dailyOps, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
         ].map(stat => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.className}`}>
             <div className="text-2xl font-bold">{stat.value}</div>
@@ -429,6 +645,74 @@ export default function BillingPage() {
         <div className="text-lg font-semibold text-white">Drop billing export here</div>
         <div className="text-sm text-slate-400 mt-2">Supports reports like Report_from_Atlantic_Concrete_Washout,_Inc.xlsx with Type, Date, Num, Memo, Item, Qty, Sales Price, Amount, and Balance columns.</div>
       </label>
+
+      <section className="card space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-white">Daily Operations Report for {selectedDate}</h2>
+            <p className="text-xs text-slate-500">
+              {demoReport ? `${demoReport.sourceFile} sheet ${demoReport.sourceSheet}` : 'Live service activity only. Choose one of the demo dates above to view Orlando report rows.'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:items-end">
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {([
+                ['Drops', operationTotals.delivery, 'text-green-400'],
+                ['Pickups', operationTotals.pickup, 'text-sky-400'],
+                ['Water', operationTotals.water_removal, 'text-yellow-400'],
+                ['Relocate', operationTotals.relocate, 'text-purple-400'],
+              ] as const).map(([label, value, color]) => (
+                <div key={label} className="rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2">
+                  <div className={`text-lg font-bold ${color}`}>{value}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+                </div>
+              ))}
+            </div>
+            {demoReport && (
+              <button onClick={saveDailyReport} disabled={savingDailyReport} className="btn-secondary px-4 py-2 text-xs">
+                {savingDailyReport ? 'Saving...' : 'Save Daily Report'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {filteredDemoEvents.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-700/50">
+                  <th className="px-3 py-2 text-left">Bin</th>
+                  <th className="px-3 py-2 text-left">Company</th>
+                  <th className="px-3 py-2 text-left">Project</th>
+                  <th className="px-3 py-2 text-left">Operation</th>
+                  <th className="px-3 py-2 text-left">Comments</th>
+                  <th className="px-3 py-2 text-left">Trace</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDemoEvents.map(event => (
+                  <tr key={event.id} className="border-b border-slate-700/30 last:border-0">
+                    <td className="px-3 py-2 font-mono text-white">{event.binNumber}</td>
+                    <td className="px-3 py-2 text-slate-300">{event.clientName}</td>
+                    <td className="px-3 py-2 text-slate-300">{event.projectName}</td>
+                    <td className="px-3 py-2"><span className={`rounded-full border px-2 py-0.5 text-xs ${operationClass(event.operation)}`}>{operationLabel(event.operation)}</span></td>
+                    <td className="px-3 py-2 text-slate-400">{event.comments || '-'}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-sky-300">{hashOperation(event)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-slate-400 text-sm">No demo daily report rows found for this day.</p>
+        )}
+
+        {unmatchedDailyEvents.length > 0 && (
+          <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
+            {unmatchedDailyEvents.length} demo operation row(s) are not matched to live service records yet. Import the daily report into Supabase to reconcile them automatically.
+          </div>
+        )}
+      </section>
 
       {batch && (
         <div className="card space-y-4">
