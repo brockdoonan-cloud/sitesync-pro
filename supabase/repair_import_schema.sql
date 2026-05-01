@@ -12,7 +12,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'billing_events', 'billing_import_batches', 'daily_operation_events')
+      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'trucks', 'truck_locations', 'driver_routes', 'route_stops', 'billing_events', 'billing_import_batches', 'daily_operation_events')
   loop
     execute format('drop policy if exists %I on %I.%I', policy_row.policyname, policy_row.schemaname, policy_row.tablename);
   end loop;
@@ -113,6 +113,74 @@ alter table public.service_requests
   add column if not exists client_id uuid,
   add column if not exists jobsite_id uuid;
 
+create table if not exists public.trucks (
+  id uuid default gen_random_uuid() primary key,
+  truck_number text,
+  status text default 'available',
+  capacity int default 6,
+  lat double precision,
+  lng double precision,
+  last_seen timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table public.trucks
+  add column if not exists truck_number text,
+  add column if not exists status text default 'available',
+  add column if not exists capacity int default 6,
+  add column if not exists lat double precision,
+  add column if not exists lng double precision,
+  add column if not exists last_seen timestamptz,
+  add column if not exists created_at timestamptz default now();
+
+create table if not exists public.truck_locations (
+  id uuid default gen_random_uuid() primary key,
+  truck_id uuid,
+  truck_number text,
+  driver_id uuid,
+  driver_name text,
+  lat double precision not null,
+  lng double precision not null,
+  heading double precision,
+  speed_mph numeric,
+  status text default 'active',
+  recorded_at timestamptz default now()
+);
+
+create table if not exists public.driver_routes (
+  id uuid default gen_random_uuid() primary key,
+  route_date date default current_date,
+  truck_id uuid,
+  truck_number text,
+  driver_id uuid,
+  driver_name text,
+  status text default 'planned',
+  start_address text,
+  total_miles numeric default 0,
+  estimated_minutes int default 0,
+  optimized_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create table if not exists public.route_stops (
+  id uuid default gen_random_uuid() primary key,
+  route_id uuid references public.driver_routes(id) on delete cascade,
+  stop_order int not null,
+  jobsite_id uuid,
+  service_request_id uuid,
+  address text,
+  lat double precision,
+  lng double precision,
+  bin_numbers text[],
+  stop_type text default 'swap',
+  status text default 'planned',
+  eta timestamptz,
+  arrived_at timestamptz,
+  completed_at timestamptz,
+  notes text,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.billing_events (
   id uuid default gen_random_uuid() primary key,
   event_date date,
@@ -194,11 +262,24 @@ create index if not exists daily_operation_events_bin_number_idx
 create index if not exists daily_operation_events_audit_hash_idx
   on public.daily_operation_events (audit_hash);
 
+create index if not exists truck_locations_truck_recorded_idx
+  on public.truck_locations (truck_number, recorded_at desc);
+
+create index if not exists driver_routes_route_date_idx
+  on public.driver_routes (route_date);
+
+create index if not exists route_stops_route_order_idx
+  on public.route_stops (route_id, stop_order);
+
 -- 3) Allow authenticated operator workflows to load operational data.
 alter table public.clients enable row level security;
 alter table public.jobsites enable row level security;
 alter table public.equipment enable row level security;
 alter table public.service_requests enable row level security;
+alter table public.trucks enable row level security;
+alter table public.truck_locations enable row level security;
+alter table public.driver_routes enable row level security;
+alter table public.route_stops enable row level security;
 alter table public.invoices enable row level security;
 alter table public.billing_events enable row level security;
 alter table public.billing_import_batches enable row level security;
@@ -221,6 +302,26 @@ create policy "authenticated manage equipment"
 
 create policy "authenticated manage service requests"
   on public.service_requests for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage trucks"
+  on public.trucks for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage truck locations"
+  on public.truck_locations for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage driver routes"
+  on public.driver_routes for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage route stops"
+  on public.route_stops for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
