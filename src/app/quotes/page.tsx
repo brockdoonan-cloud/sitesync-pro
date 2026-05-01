@@ -2,12 +2,15 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import LanguageToggle from '@/components/LanguageToggle'
+import { useLanguage } from '@/lib/i18n'
 
 const EQUIPMENT_TYPES = ['Dumpster / Roll-off', 'Washout Container', 'Slurry Tank', 'Porta Potty', 'Water Tank', 'Storage Container', 'Other']
 const DUMPSTER_SIZES = ['10-yard', '20-yard', '30-yard', '40-yard']
 const JOB_TYPES = ['Residential', 'Commercial', 'Construction', 'Cleanup', 'Other']
 
 export default function QuotesPage() {
+  const { t } = useLanguage()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -28,11 +31,11 @@ export default function QuotesPage() {
 
   const handleSubmit = async () => {
     if (!address || !city || !zip || !equipmentType || !jobType) {
-      setError('Please fill in the exact address, location, equipment type, and job type.')
+      setError(t('quoteRequired'))
       return
     }
     if (!name || !email) {
-      setError('Please provide your name and email.')
+      setError(t('contactRequired'))
       return
     }
     setLoading(true)
@@ -68,20 +71,20 @@ export default function QuotesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-3">Request Sent!</h1>
+          <h1 className="text-3xl font-bold text-white mb-3">{t('requestSent')}</h1>
           <p className="text-slate-400 mb-2 text-lg">
-            Your request was sent to local providers in{' '}
+            {t('requestSentToProviders')}{' '}
             <span className="text-sky-400 font-semibold">{city}, {zip}</span>.
           </p>
           <p className="text-slate-500 text-sm mb-8">
-            Quotes will be sent to <strong className="text-slate-300">{email}</strong>.
+            {t('quotesSentTo')} <strong className="text-slate-300">{email}</strong>.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <button onClick={() => setSubmitted(false)} className="btn-secondary px-6 py-2.5">Submit Another</button>
+            <button onClick={() => setSubmitted(false)} className="btn-secondary px-6 py-2.5">{t('submitAnother')}</button>
             <button onClick={shareQuoteLink} className="btn-secondary px-6 py-2.5">
-              {linkCopied ? 'Link Copied' : 'Share Quote Link'}
+              {linkCopied ? t('linkCopied') : t('shareQuoteLink')}
             </button>
-            <Link href="/" className="btn-primary px-6 py-2.5">Back to Home</Link>
+            <Link href="/" className="btn-primary px-6 py-2.5">{t('backHome')}</Link>
           </div>
         </div>
       </div>
@@ -92,6 +95,7 @@ export default function QuotesPage() {
     <div className="min-h-screen bg-slate-950">
       <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800/60 py-12 px-4">
         <div className="max-w-2xl mx-auto text-center">
+          <div className="mb-4 flex justify-end"><LanguageToggle /></div>
           <Link href="/" className="inline-flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center">
               <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
@@ -101,10 +105,10 @@ export default function QuotesPage() {
             <span className="font-bold text-white">SiteSync Pro</span>
           </Link>
           <h1 className="text-4xl font-bold text-white mb-4">
-            Get Equipment Quotes<br />from Local Providers
+            {t('quotesTitle')}
           </h1>
           <p className="text-slate-400 text-lg max-w-lg mx-auto">
-            Dumpsters, washout containers, portable toilets, tanks and more.
+            {t('quotesSubtitle')}
           </p>
         </div>
       </div>
@@ -113,45 +117,45 @@ export default function QuotesPage() {
         {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
 
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">1. Your Contact Info</h2>
+          <h2 className="font-semibold text-white">{t('contactInfo')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Full Name *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('fullName')} *</label>
               <input type="text" className="input" placeholder="Jane Smith" value={name} onChange={e => setName(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('email')} *</label>
               <input type="email" className="input" placeholder="jane@company.com" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Phone <span className="text-slate-500">(optional)</span></label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('phone')} <span className="text-slate-500">({t('optional')})</span></label>
               <input type="tel" className="input" placeholder="(407) 555-0100" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
           </div>
         </div>
 
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">2. Delivery Location</h2>
+          <h2 className="font-semibold text-white">{t('deliveryLocation')}</h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Exact Address *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('exactAddress')} *</label>
               <input type="text" className="input" placeholder="123 Construction Blvd, Orlando, FL" value={address} onChange={e => setAddress(e.target.value)} />
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">City *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('city')} *</label>
               <input type="text" className="input" placeholder="Orlando" value={city} onChange={e => setCity(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">ZIP *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('zip')} *</label>
               <input type="text" className="input font-mono" placeholder="32801" maxLength={5} value={zip} onChange={e => setZip(e.target.value.replace(/[^0-9]/g, ''))} />
             </div>
           </div>
         </div>
 
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">3. Equipment Needed</h2>
+          <h2 className="font-semibold text-white">{t('equipmentNeeded')}</h2>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Equipment Type *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">{t('equipmentType')} *</label>
             <div className="grid grid-cols-2 gap-2">
               {EQUIPMENT_TYPES.map(t => (
                 <button key={t} onClick={() => setEquipmentType(t)}
@@ -163,7 +167,7 @@ export default function QuotesPage() {
           </div>
           {equipmentType.includes('Dumpster') && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Dumpster Size</label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">{t('dumpsterSize')}</label>
               <div className="grid grid-cols-4 gap-2">
                 {DUMPSTER_SIZES.map(s => (
                   <button key={s} onClick={() => setDumpsterSize(s)}
@@ -175,7 +179,7 @@ export default function QuotesPage() {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Job Type *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">{t('jobType')} *</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {JOB_TYPES.map(j => (
                 <button key={j} onClick={() => setJobType(j)}
@@ -188,29 +192,29 @@ export default function QuotesPage() {
         </div>
 
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-4">
-          <h2 className="font-semibold text-white">4. Timeframe</h2>
+          <h2 className="font-semibold text-white">{t('timeframe')}</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Start Date</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('startDate')}</label>
               <input type="date" className="input" value={startDate} onChange={e => setStartDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">End Date</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('endDate')}</label>
               <input type="date" className="input" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
         </div>
 
         <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6">
-          <label className="block text-sm font-medium text-slate-300 mb-1.5">Notes <span className="text-slate-500">(optional)</span></label>
-          <textarea className="input min-h-[100px] resize-none" placeholder="Gate code, site access details, weight restrictions..." value={notes} onChange={e => setNotes(e.target.value)} />
+          <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('notes')} <span className="text-slate-500">({t('optional')})</span></label>
+          <textarea className="input min-h-[100px] resize-none" placeholder={t('notesPlaceholder')} value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
 
         <button onClick={handleSubmit} disabled={loading}
           className="w-full py-4 rounded-2xl font-bold text-white text-xl transition-all bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg shadow-sky-500/20">
-          {loading ? 'Sending to Providers...' : 'Get Free Quotes'}
+          {loading ? t('sendingProviders') : t('getFreeQuotes')}
         </button>
-        <p className="text-center text-slate-600 text-xs">No spam - providers only contact you about your request. Free to use.</p>
+        <p className="text-center text-slate-600 text-xs">{t('noSpam')}</p>
       </div>
     </div>
   )

@@ -4,8 +4,11 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { isOperatorUser } from '@/lib/operator'
+import LanguageToggle from '@/components/LanguageToggle'
+import { useLanguage } from '@/lib/i18n'
 
 export default function NavBar({ user, profile }: { user: any; profile: any }) {
+  const { t } = useLanguage()
   const router = useRouter()
   const pathname = usePathname()
   const isOp = isOperatorUser(profile, user?.email)
@@ -32,9 +35,9 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/operator/billing', label: 'Billing' },
   ]
   const custLinks = [
-    { href: '/dashboard/customer', label: 'Overview' },
-    { href: '/dashboard/customer/request', label: 'Request Service' },
-    { href: '/dashboard/customer/tracking', label: 'Track' },
+    { href: '/dashboard/customer', label: t('overview') },
+    { href: '/dashboard/customer/request', label: t('requestService') },
+    { href: '/dashboard/customer/tracking', label: t('track') },
   ]
   const links = isOp ? opLinks : custLinks
 
@@ -65,11 +68,12 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <LanguageToggle />
           <div className="text-right hidden sm:block">
             <div className="text-xs font-medium text-white">{profile?.full_name ?? user.email}</div>
             <div className="text-xs text-slate-500 capitalize">{profile?.company_name || profile?.role}</div>
           </div>
-          <button onClick={handleSignOut} className="text-slate-400 hover:text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-700/50">Sign Out</button>
+          <button onClick={handleSignOut} className="text-slate-400 hover:text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-700/50">{t('signOut')}</button>
         </div>
       </div>
       <div className="container mx-auto px-4 max-w-7xl pb-2 lg:hidden">

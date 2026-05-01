@@ -8,6 +8,29 @@
 * { box-sizing: border-box; }
 body { min-height: 100vh; background: var(--background); }
 
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #0f172a;
+  font-family: inherit;
+  cursor: grab;
+}
+
+.leaflet-container:active {
+  cursor: grabbing;
+}
+
+.leaflet-tile-pane,
+.leaflet-map-pane,
+.leaflet-pane {
+  backface-visibility: hidden;
+}
+
+.leaflet-tile {
+  background: #0f172a;
+  will-change: transform;
+}
+
 .bin-map-pin {
   min-width: 34px;
   height: 26px;

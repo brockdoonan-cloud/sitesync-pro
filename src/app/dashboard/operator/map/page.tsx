@@ -261,10 +261,15 @@ function FallbackEquipmentMap({
         preferCanvas: true,
         zoomControl: true,
         attributionControl: true,
+        wheelDebounceTime: 40,
+        wheelPxPerZoomLevel: 90,
       })
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '(c) OpenStreetMap',
+        keepBuffer: 5,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
       }).addTo(map)
       markerLayer.current = L.layerGroup().addTo(map)
       leafletMap.current = map
@@ -331,28 +336,8 @@ function FallbackEquipmentMap({
   }, [])
 
   return (
-    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-      <div ref={mapRef} className="absolute inset-0" />
-      <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent p-4">
-        <div className="text-xs uppercase tracking-wide text-slate-300">Smooth bin map</div>
-        <div className="text-lg font-semibold text-white">{visibleBinMarkers.length} bins on the map</div>
-        <div className="text-xs text-slate-300 mt-1">Drag and wheel zoom are handled by Leaflet. Red pins need swap.</div>
-      </div>
-      <div className="absolute bottom-4 left-4 right-4 z-10 max-h-40 overflow-auto rounded-xl border border-slate-700/70 bg-slate-950/90 p-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Click a jobsite to inspect bins</div>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {sites.slice(0, 8).map(site => (
-            <button
-              key={site.id}
-              onClick={() => onSelect(site.id)}
-              className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selected?.id === site.id ? 'border-sky-500/60 bg-sky-500/20 text-white' : 'border-slate-700/60 bg-slate-900/80 text-slate-300 hover:border-slate-500'}`}
-            >
-              <span className="block truncate font-medium">{site.address || 'Jobsite'}</span>
-              <span className={siteSwapCount(site) > 0 ? 'text-red-300' : 'text-green-300'}>{site.equipment.length} bins - {siteSwapCount(site)} need swap</span>
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative isolate">
+      <div ref={mapRef} className="absolute inset-0 z-0 bg-slate-900" />
     </div>
   )
 }

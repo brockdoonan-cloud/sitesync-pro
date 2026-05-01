@@ -3,8 +3,11 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import LanguageToggle from '@/components/LanguageToggle'
+import { useLanguage } from '@/lib/i18n'
 
 export default function SignupPage() {
+  const { t } = useLanguage()
   const [form, setForm] = useState({ email: '', password: '', full_name: '', company_name: '', role: 'customer' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -12,7 +15,7 @@ export default function SignupPage() {
 
   const handleSignup = async () => {
     if (!form.email || !form.password || !form.full_name) {
-      setError('Please fill in all required fields')
+      setError(t('requiredFields'))
       return
     }
 
@@ -44,9 +47,9 @@ export default function SignupPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="card text-center max-w-md w-full">
-          <h2 className="text-xl font-bold text-white mb-2">Check your email</h2>
-          <p className="text-slate-400 text-sm">Confirm your account, then sign in to continue.</p>
-          <Link href="/auth/login" className="btn-primary w-full mt-6 block py-2.5">Back to Sign In</Link>
+          <h2 className="text-xl font-bold text-white mb-2">{t('checkEmail')}</h2>
+          <p className="text-slate-400 text-sm">{t('confirmEmail')}</p>
+          <Link href="/auth/login" className="btn-primary w-full mt-6 block py-2.5">{t('backToSignIn')}</Link>
         </div>
       </div>
     )
@@ -55,6 +58,7 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950 py-12">
       <div className="w-full max-w-md">
+        <div className="mb-4 flex justify-end"><LanguageToggle /></div>
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center">
@@ -64,29 +68,29 @@ export default function SignupPage() {
             </div>
             <span className="font-bold text-lg text-white">SiteSync Pro</span>
           </Link>
-          <h1 className="text-2xl font-bold text-white">Create your account</h1>
-          <p className="text-slate-400 mt-1">Manage jobsite equipment from one place</p>
+          <h1 className="text-2xl font-bold text-white">{t('createAccountTitle')}</h1>
+          <p className="text-slate-400 mt-1">{t('createAccountSubtitle')}</p>
         </div>
         <div className="card space-y-4">
           {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Full Name *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('fullName')} *</label>
             <input type="text" className="input" placeholder="John Smith" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Company</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('company')}</label>
             <input type="text" className="input" placeholder="Company name" value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('email')} *</label>
             <input type="email" className="input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Password *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('password')} *</label>
             <input type="password" className="input" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
           </div>
-          <button onClick={handleSignup} disabled={loading} className="btn-primary w-full py-3">{loading ? 'Creating...' : 'Create Account'}</button>
-          <p className="text-center text-slate-400 text-sm">Already have an account? <Link href="/auth/login" className="text-sky-400 hover:text-sky-300 font-medium">Sign in</Link></p>
+          <button onClick={handleSignup} disabled={loading} className="btn-primary w-full py-3">{loading ? t('creating') : t('createAccount')}</button>
+          <p className="text-center text-slate-400 text-sm">{t('alreadyAccount')} <Link href="/auth/login" className="text-sky-400 hover:text-sky-300 font-medium">{t('signIn')}</Link></p>
         </div>
       </div>
     </div>
