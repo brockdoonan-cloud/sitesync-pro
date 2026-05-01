@@ -309,6 +309,202 @@ const translations: Record<Language, Dictionary> = {
   },
 }
 
+const exactSpanishPhrases: Record<string, string> = {
+  ...Object.fromEntries(Object.keys(translations.en).map(key => [translations.en[key], translations.es[key]])),
+  'Operator Dashboard': 'Panel de operador',
+  'Operations overview': 'Resumen de operaciones',
+  'Setup Real Data': 'Configurar datos reales',
+  'Onboard clients, jobsites, bins, and balances': 'Carga clientes, sitios, contenedores y saldos',
+  'Bulk Import': 'Importaci\u00f3n masiva',
+  'Drag in Excel reports for mass onboarding': 'Arrastra reportes de Excel para carga masiva',
+  'Active service jobs': 'Trabajos de servicio activos',
+  'Quote Leads': 'Clientes potenciales de cotizaci\u00f3n',
+  'New quote requests': 'Nuevas solicitudes de cotizaci\u00f3n',
+  'Bins and containers': 'Contenedores y equipo',
+  'Swap status by jobsite': 'Estado de cambios por sitio',
+  'Client accounts': 'Cuentas de clientes',
+  'Service requests': 'Solicitudes de servicio',
+  'Driver routes': 'Rutas de conductores',
+  'Invoices and payments': 'Facturas y pagos',
+  'Active Jobs': 'Trabajos activos',
+  'New Leads': 'Nuevos clientes',
+  'Bins Deployed': 'Contenedores desplegados',
+  'Bins Available': 'Contenedores disponibles',
+  'Welcome back': 'Bienvenido de nuevo',
+  'Active Requests': 'Solicitudes activas',
+  'Tracked Bins': 'Contenedores rastreados',
+  'Schedule swap, pickup, or delivery': 'Programa cambio, recogida o entrega',
+  'Track confirmed service': 'Rastrea servicio confirmado',
+  'Recent Requests': 'Solicitudes recientes',
+  'No service requests yet.': 'Todav\u00eda no hay solicitudes de servicio.',
+  'Jobs': 'Trabajos',
+  "Today's schedule and upcoming jobs": 'Programa de hoy y trabajos pr\u00f3ximos',
+  'Today': 'Hoy',
+  'Upcoming': 'Pr\u00f3ximos',
+  'No jobs today.': 'No hay trabajos hoy.',
+  'No upcoming jobs.': 'No hay trabajos pr\u00f3ximos.',
+  'Address': 'Direcci\u00f3n',
+  'Customer': 'Cliente',
+  'Unassigned': 'Sin asignar',
+  'Billing': 'Facturaci\u00f3n',
+  'Review invoices, active balances, and customer billing actions.': 'Revisa facturas, saldos activos y acciones de facturaci\u00f3n.',
+  'Add Balance': 'Agregar saldo',
+  'Invoices': 'Facturas',
+  'Active Balance': 'Saldo activo',
+  'Overdue': 'Vencido',
+  'Paid': 'Pagado',
+  'Client not linked': 'Cliente no vinculado',
+  'Send': 'Enviar',
+  'No email': 'Sin correo',
+  'No invoices found.': 'No se encontraron facturas.',
+  'Clients': 'Clientes',
+  'Customer accounts linked to jobsites and equipment.': 'Cuentas de clientes vinculadas a sitios y equipo.',
+  'Unnamed client': 'Cliente sin nombre',
+  'Contact': 'Contacto',
+  'Phone': 'Tel\u00e9fono',
+  'No clients found.': 'No se encontraron clientes.',
+  'Track bins, availability, and swap needs.': 'Rastrea contenedores, disponibilidad y cambios necesarios.',
+  'Total Units': 'Unidades totales',
+  'Deployed': 'Desplegados',
+  'Available': 'Disponibles',
+  'Unit': 'Unidad',
+  'Last Service': '\u00daltimo servicio',
+  'No equipment found.': 'No se encontr\u00f3 equipo.',
+  'Trucks': 'Camiones',
+  'Fleet availability and driver assignments.': 'Disponibilidad de flota y asignaci\u00f3n de conductores.',
+  'Unassigned driver': 'Conductor sin asignar',
+  'No trucks found.': 'No se encontraron camiones.',
+  'Service Requests': 'Solicitudes de servicio',
+  'Review and manage all incoming service requests': 'Revisa y administra todas las solicitudes entrantes',
+  'Service request': 'Solicitud de servicio',
+  'No address': 'Sin direcci\u00f3n',
+  'Route Optimizer': 'Optimizador de rutas',
+  'Prioritized driver route for active jobsites and bins that need swaps.': 'Ruta priorizada para sitios activos y contenedores que necesitan cambio.',
+  'Swap Route': 'Ruta de cambios',
+  'All Active': 'Todos activos',
+  'Active Stops': 'Paradas activas',
+  'Bins On Route': 'Contenedores en ruta',
+  'Swap Bins': 'Contenedores para cambio',
+  'Est. Miles': 'Millas estimadas',
+  'No route stops found': 'No se encontraron paradas',
+  'Import jobsites and equipment, or mark bins as full/needs service to build the swap route.': 'Importa sitios y equipo, o marca contenedores como llenos/necesitan servicio para crear la ruta.',
+  'active': 'activo',
+  'mi from previous': 'mi desde anterior',
+  'bins on site': 'contenedores en sitio',
+  'need swap': 'necesitan cambio',
+  'Navigate': 'Navegar',
+  'Driver route': 'Ruta del conductor',
+  'Stops are ordered from the Orlando yard by a priority-plus-distance pass: urgent swap bins first, then nearby jobsites to reduce drive time.': 'Las paradas se ordenan desde el patio de Orlando por prioridad y distancia: primero cambios urgentes, luego sitios cercanos para reducir manejo.',
+  'Open Optimized Route': 'Abrir ruta optimizada',
+  'Google Maps supports a limited number of stops per route link, so this sends the first 9 highest-priority stops.': 'Google Maps permite un n\u00famero limitado de paradas por enlace, por eso env\u00eda las primeras 9 de mayor prioridad.',
+  'No bins currently need swaps.': 'Actualmente ning\u00fan contenedor necesita cambio.',
+  'Operations Onboarding': 'Carga inicial de operaciones',
+  'Load real clients, jobsites, bins, active service work, and starting balances.': 'Carga clientes reales, sitios, contenedores, servicios activos y saldos iniciales.',
+  'Client Account': 'Cuenta de cliente',
+  'Active Jobsite': 'Sitio activo',
+  'Bin / Equipment': 'Contenedor / equipo',
+  'Active Service / Tracking': 'Servicio activo / rastreo',
+  'Starting Balance / Invoice': 'Saldo inicial / factura',
+  'Save Client': 'Guardar cliente',
+  'Save Jobsite': 'Guardar sitio',
+  'Save Equipment': 'Guardar equipo',
+  'Save Service Request': 'Guardar solicitud de servicio',
+  'Save Balance': 'Guardar saldo',
+  'Bulk Office Import': 'Importaci\u00f3n masiva de oficina',
+  'Drag in Orlando-style Excel reports to onboard hundreds of bins, jobsites, customers, and active services at once.': 'Arrastra reportes de Excel estilo Orlando para cargar cientos de contenedores, sitios, clientes y servicios activos a la vez.',
+  'Drop an Excel report here': 'Suelta un reporte de Excel aqu\u00ed',
+  'Preview': 'Vista previa',
+  'Import All': 'Importar todo',
+  'Importing...': 'Importando...',
+  'Import warnings': 'Advertencias de importaci\u00f3n',
+  'Rows': 'Filas',
+  'Bins': 'Contenedores',
+  'Service Records': 'Registros de servicio',
+  'Project': 'Proyecto',
+  'Operation': 'Operaci\u00f3n',
+  'Equipment rental requests from potential customers': 'Solicitudes de renta de equipo de posibles clientes',
+  'View Public Form': 'Ver formulario p\u00fablico',
+  'All Leads': 'Todos los clientes',
+  'No leads yet': 'Todav\u00eda no hay clientes potenciales',
+  'Update Status': 'Actualizar estado',
+  'Send SMS via Quo': 'Enviar SMS con Quo',
+  'ETA / Schedule / Quote': 'ETA / Programa / Cotizaci\u00f3n',
+  'Confirm Order': 'Confirmar orden',
+  'Send Schedule': 'Enviar programa',
+  'ETA Update': 'Actualizar ETA',
+  'Mark Complete': 'Marcar completo',
+  'Email Customer': 'Enviar correo',
+  'Call': 'Llamar',
+  'Loading address search...': 'Cargando b\u00fasqueda de direcciones...',
+  'Enter address...': 'Ingresa direcci\u00f3n...',
+}
+
+const spanishPrefixPhrases: Array<[string, string]> = [
+  ['Welcome back, ', 'Bienvenido de nuevo, '],
+  ['Address: ', 'Direcci\u00f3n: '],
+  ['Customer: ', 'Cliente: '],
+  ['Scheduled: ', 'Programado: '],
+  ['Contact: ', 'Contacto: '],
+  ['Email: ', 'Correo: '],
+  ['Phone: ', 'Tel\u00e9fono: '],
+  ['Status: ', 'Estado: '],
+  ['Last serviced ', '\u00daltimo servicio '],
+]
+
+const englishPhrases = Object.fromEntries(Object.entries(exactSpanishPhrases).map(([english, spanish]) => [spanish, english]))
+const englishPrefixPhrases = spanishPrefixPhrases.map(([english, spanish]) => [spanish, english] as [string, string])
+
+type TranslatableText = Text & { __sitesyncOriginal?: string }
+type TranslatableElement = HTMLElement & { __sitesyncOriginalAttrs?: Record<string, string> }
+
+function translatePhrase(value: string, language: Language) {
+  if (language === 'en') {
+    const trimmed = value.trim()
+    const translated = englishPhrases[trimmed]
+    if (translated) return value.replace(trimmed, translated)
+    const prefix = englishPrefixPhrases.find(([source]) => trimmed.startsWith(source))
+    return prefix ? value.replace(prefix[0], prefix[1]) : value
+  }
+  const trimmed = value.trim()
+  const translated = exactSpanishPhrases[trimmed]
+  if (translated) return value.replace(trimmed, translated)
+  const prefix = spanishPrefixPhrases.find(([source]) => trimmed.startsWith(source))
+  return prefix ? value.replace(prefix[0], prefix[1]) : value
+}
+
+function applyDomLanguage(language: Language) {
+  if (typeof document === 'undefined') return
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement
+      if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT
+      if (parent.closest('[data-no-translate="true"]')) return NodeFilter.FILTER_REJECT
+      return node.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    },
+  })
+
+  let node = walker.nextNode() as TranslatableText | null
+  while (node) {
+    if (!node.__sitesyncOriginal) node.__sitesyncOriginal = node.textContent || ''
+    const nextValue = translatePhrase(node.__sitesyncOriginal, language)
+    if (node.textContent !== nextValue) node.textContent = nextValue
+    node = walker.nextNode() as TranslatableText | null
+  }
+
+  document.querySelectorAll<TranslatableElement>('input, textarea, [title], [aria-label]').forEach(element => {
+    const attrs = ['placeholder', 'title', 'aria-label']
+    element.__sitesyncOriginalAttrs ||= {}
+    attrs.forEach(attr => {
+      const value = element.getAttribute(attr)
+      if (!value) return
+      element.__sitesyncOriginalAttrs![attr] ||= value
+      const nextValue = translatePhrase(element.__sitesyncOriginalAttrs![attr], language)
+      if (value !== nextValue) element.setAttribute(attr, nextValue)
+    })
+  })
+}
+
 type LanguageContextValue = {
   language: Language
   setLanguage: (language: Language) => void
@@ -322,7 +518,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = window.localStorage.getItem('sitesync-language')
-    if (stored === 'en' || stored === 'es') setLanguageState(stored)
+    if (stored === 'en' || stored === 'es') {
+      setLanguageState(stored)
+      return
+    }
+    const browserLanguage = navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en'
+    setLanguageState(browserLanguage)
   }, [])
 
   const value = useMemo<LanguageContextValue>(() => ({
@@ -339,6 +540,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = language
+    applyDomLanguage(language)
+    const observer = new MutationObserver(() => applyDomLanguage(language))
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] })
+    return () => observer.disconnect()
   }, [language])
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>

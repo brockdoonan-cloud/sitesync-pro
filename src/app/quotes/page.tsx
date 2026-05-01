@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import LanguageToggle from '@/components/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
 
 const EQUIPMENT_TYPES = ['Dumpster / Roll-off', 'Washout Container', 'Slurry Tank', 'Porta Potty', 'Water Tank', 'Storage Container', 'Other']
@@ -95,7 +94,6 @@ export default function QuotesPage() {
     <div className="min-h-screen bg-slate-950">
       <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800/60 py-12 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <div className="mb-4 flex justify-end"><LanguageToggle /></div>
           <Link href="/" className="inline-flex items-center gap-2 mb-8 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center">
               <svg width="18" height="18" viewBox="0 0 28 28" fill="none">

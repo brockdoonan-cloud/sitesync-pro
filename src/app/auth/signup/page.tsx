@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import LanguageToggle from '@/components/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
 
 export default function SignupPage() {
@@ -58,7 +57,6 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-4 flex justify-end"><LanguageToggle /></div>
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center">

@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import LanguageToggle from '@/components/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
 export default function LoginPage() {
   const { t } = useLanguage()
@@ -18,7 +17,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-slate-950">
       <div className="w-full max-w-md">
-        <div className="mb-4 flex justify-end"><LanguageToggle /></div>
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center"><svg width="18" height="18" viewBox="0 0 28 28" fill="none"><path d="M4 20L10 8L16 16L20 10L24 20H4Z" fill="white"/></svg></div>

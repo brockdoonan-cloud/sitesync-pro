@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { isOperatorUser } from '@/lib/operator'
-import LanguageToggle from '@/components/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
 
 export default function NavBar({ user, profile }: { user: any; profile: any }) {
@@ -68,7 +67,6 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <LanguageToggle />
           <div className="text-right hidden sm:block">
             <div className="text-xs font-medium text-white">{profile?.full_name ?? user.email}</div>
             <div className="text-xs text-slate-500 capitalize">{profile?.company_name || profile?.role}</div>

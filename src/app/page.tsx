@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import LanguageToggle from '@/components/LanguageToggle'
 import { useLanguage } from '@/lib/i18n'
 
 export default function Home() {
@@ -10,7 +9,6 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-900/20" />
-      <div className="absolute right-4 top-4 z-20"><LanguageToggle /></div>
       <div className="relative z-10 text-center max-w-3xl mx-auto">
         <div className="flex items-center justify-center gap-3 mb-8">
           <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center">
