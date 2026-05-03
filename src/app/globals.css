@@ -47,6 +47,26 @@ body { min-height: 100vh; background: var(--background); }
 .bin-map-pin-swap { background: #ef4444; }
 .bin-map-pin-active { border-color: #fff; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.35), 0 12px 24px rgba(15, 23, 42, 0.45); }
 
+.truck-map-pin {
+  min-width: 42px;
+  height: 28px;
+  border-radius: 8px 8px 8px 2px;
+  border: 2px solid #38bdf8;
+  background: #020617;
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.4);
+}
+
+.truck-map-pin-active {
+  border-color: #fff;
+  background: #38bdf8;
+  color: #020617;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.35), 0 12px 24px rgba(15, 23, 42, 0.45);
+}
+
 @layer components {
   .btn-primary { @apply bg-sky-500 hover:bg-sky-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed; }
   .btn-secondary { @apply bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200; }

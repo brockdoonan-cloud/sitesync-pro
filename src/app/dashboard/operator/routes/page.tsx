@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Jobsite = {
   id: string
@@ -46,6 +47,47 @@ type AssignedRoute = {
   stops: Stop[]
   miles: number
   swaps: number
+}
+
+type LatLng = { lat: number; lng: number }
+type GoogleMapsWindow = Window & {
+  google?: {
+    maps: {
+      Map: new (element: HTMLElement, options: object) => {
+        fitBounds: (bounds: unknown) => void
+      }
+      Marker: new (options: object) => { addListener: (eventName: string, cb: () => void) => void }
+      InfoWindow: new (options: object) => { open: (map: unknown, marker: unknown) => void }
+      LatLngBounds: new () => { extend: (latLng: LatLng) => void }
+      Point: new (x: number, y: number) => unknown
+    }
+  }
+  initSiteSyncRouteMap?: () => void
+}
+
+let googleMapsLoading = false
+let googleMapsLoaded = false
+const googleCallbacks: (() => void)[] = []
+
+function loadGoogleMaps(apiKey: string, cb: () => void) {
+  const mapsWindow = window as GoogleMapsWindow
+  if (googleMapsLoaded || mapsWindow.google?.maps) {
+    cb()
+    return
+  }
+  googleCallbacks.push(cb)
+  if (googleMapsLoading) return
+  googleMapsLoading = true
+  mapsWindow.initSiteSyncRouteMap = () => {
+    googleMapsLoaded = true
+    googleCallbacks.splice(0).forEach(fn => fn())
+  }
+  const script = document.createElement('script')
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initSiteSyncRouteMap&loading=async`
+  script.async = true
+  script.defer = true
+  script.onerror = () => googleCallbacks.splice(0).forEach(fn => fn())
+  document.head.appendChild(script)
 }
 
 const HOME_BASE = {
@@ -234,17 +276,6 @@ function mapsSearchUrl(site: Jobsite) {
   return `https://www.google.com/maps/search/${encodeURIComponent(addressFor(site))}`
 }
 
-function mapPoint(lat: number, lng: number) {
-  const minLat = 28.1
-  const maxLat = 28.92
-  const minLng = -81.82
-  const maxLng = -80.65
-  return {
-    x: Math.max(4, Math.min(96, ((lng - minLng) / (maxLng - minLng)) * 100)),
-    y: Math.max(6, Math.min(94, (1 - (lat - minLat) / (maxLat - minLat)) * 100)),
-  }
-}
-
 function liveTruckPosition(truck: Truck, stops: Stop[], tick: number) {
   if (!stops.length) return { lat: truck.lat, lng: truck.lng }
   const ordered = stops.map(roughCoord)
@@ -256,6 +287,198 @@ function liveTruckPosition(truck: Truck, stops: Stop[], tick: number) {
     lat: from.lat + (to.lat - from.lat) * local,
     lng: from.lng + (to.lng - from.lng) * local,
   }
+}
+
+function DispatchMap({
+  routes,
+  stops,
+  selectedTruck,
+  tick,
+  onSelectTruck,
+}: {
+  routes: AssignedRoute[]
+  stops: Stop[]
+  selectedTruck: string
+  tick: number
+  onSelectTruck: (id: string) => void
+}) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const leafletMap = useRef<LeafletMap | null>(null)
+  const markerLayer = useRef<{ clearLayers: () => void; addLayer: (marker: LeafletMarker) => void } | null>(null)
+  const [googleReady, setGoogleReady] = useState(false)
+  const [googleFailed, setGoogleFailed] = useState(false)
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || ''
+
+  useEffect(() => {
+    if (!apiKey) return
+    setGoogleFailed(false)
+    loadGoogleMaps(apiKey, () => setGoogleReady(Boolean((window as GoogleMapsWindow).google?.maps)))
+    const timer = window.setTimeout(() => {
+      if (!(window as GoogleMapsWindow).google?.maps) setGoogleFailed(true)
+    }, 5000)
+    return () => window.clearTimeout(timer)
+  }, [apiKey])
+
+  useEffect(() => {
+    const mapsWindow = window as GoogleMapsWindow
+    if (!apiKey || !googleReady || googleFailed || !mapRef.current || !mapsWindow.google?.maps) return
+    const google = mapsWindow.google
+    const map = new google.maps.Map(mapRef.current, {
+      center: HOME_BASE,
+      zoom: 9,
+      mapTypeControl: false,
+      fullscreenControl: true,
+      streetViewControl: false,
+    })
+    const bounds = new google.maps.LatLngBounds()
+
+    stops.forEach(stop => {
+      const position = roughCoord(stop)
+      const urgent = stop.equipment.filter(needsSwap).length
+      const marker = new google.maps.Marker({
+        map,
+        position,
+        title: `${stop.name || addressFor(stop)} - ${urgent} swaps`,
+        label: urgent ? { text: String(urgent), color: '#ffffff', fontWeight: '800' } : undefined,
+        icon: {
+          path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+          fillColor: urgent ? '#ef4444' : '#22c55e',
+          fillOpacity: 1,
+          strokeColor: '#0f172a',
+          strokeWeight: 2,
+          scale: urgent ? 1.45 : 1.2,
+          anchor: new google.maps.Point(12, 24),
+        },
+      })
+      const info = new google.maps.InfoWindow({
+        content: `<div style="font-family:system-ui;min-width:220px"><strong>${stop.name || addressFor(stop)}</strong><br/>${addressFor(stop)}<br/>${urgent} swap bins | ${stop.equipment.length} total bins</div>`,
+      })
+      marker.addListener('click', () => info.open(map, marker))
+      bounds.extend(position)
+    })
+
+    routes.forEach(route => {
+      const position = liveTruckPosition(route.truck, route.stops, tick)
+      const marker = new google.maps.Marker({
+        map,
+        position,
+        title: `Truck ${route.truck.truck_number}`,
+        label: { text: `T${route.truck.truck_number}`, color: selectedTruck === route.truck.id ? '#0f172a' : '#ffffff', fontWeight: '800', fontSize: '12px' },
+        icon: {
+          path: 'M3 13h2l2-5h8l2 5h2v6h-2a2 2 0 0 1-4 0H9a2 2 0 0 1-4 0H3v-6z',
+          fillColor: selectedTruck === route.truck.id ? '#38bdf8' : '#0f172a',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: selectedTruck === route.truck.id ? 3 : 2,
+          scale: 1.35,
+          anchor: new google.maps.Point(11, 14),
+        },
+      })
+      marker.addListener('click', () => onSelectTruck(route.truck.id))
+      bounds.extend(position)
+    })
+
+    bounds.extend(HOME_BASE)
+    map.fitBounds(bounds)
+  }, [apiKey, googleFailed, googleReady, onSelectTruck, routes, selectedTruck, stops, tick])
+
+  useEffect(() => {
+    if (apiKey && googleReady && !googleFailed) return
+    let cancelled = false
+
+    async function initLeaflet() {
+      if (!mapRef.current || leafletMap.current) return
+      const L = await import('leaflet')
+      if (cancelled || !mapRef.current) return
+      const map = L.map(mapRef.current, {
+        center: [HOME_BASE.lat, HOME_BASE.lng],
+        zoom: 9,
+        preferCanvas: true,
+        zoomControl: true,
+        wheelDebounceTime: 40,
+        wheelPxPerZoomLevel: 90,
+      })
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '(c) OpenStreetMap',
+        keepBuffer: 5,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+      }).addTo(map)
+      markerLayer.current = L.layerGroup().addTo(map)
+      leafletMap.current = map
+    }
+
+    initLeaflet()
+    return () => {
+      cancelled = true
+      leafletMap.current?.remove()
+      leafletMap.current = null
+      markerLayer.current = null
+    }
+  }, [apiKey, googleFailed, googleReady])
+
+  useEffect(() => {
+    if (apiKey && googleReady && !googleFailed) return
+    let cancelled = false
+
+    async function renderLeaflet() {
+      const map = leafletMap.current
+      const layer = markerLayer.current
+      if (!map || !layer) return
+      const L = await import('leaflet')
+      if (cancelled) return
+      layer.clearLayers()
+      const bounds: [number, number][] = []
+
+      stops.forEach(stop => {
+        const position = roughCoord(stop)
+        const urgent = stop.equipment.filter(needsSwap).length
+        const icon: DivIcon = L.divIcon({
+          className: '',
+          html: `<button class="bin-map-pin ${urgent ? 'bin-map-pin-swap' : 'bin-map-pin-ok'}">${urgent || stop.equipment.length}</button>`,
+          iconSize: [34, 28],
+          iconAnchor: [17, 28],
+        })
+        const marker = L.marker([position.lat, position.lng], { icon })
+          .bindPopup(`<strong>${stop.name || addressFor(stop)}</strong><br/>${addressFor(stop)}<br/>${urgent} swap bins`)
+        layer.addLayer(marker)
+        bounds.push([position.lat, position.lng])
+      })
+
+      routes.forEach(route => {
+        const position = liveTruckPosition(route.truck, route.stops, tick)
+        const active = selectedTruck === route.truck.id
+        const icon: DivIcon = L.divIcon({
+          className: '',
+          html: `<button class="truck-map-pin ${active ? 'truck-map-pin-active' : ''}">T${route.truck.truck_number}</button>`,
+          iconSize: [44, 30],
+          iconAnchor: [22, 30],
+        })
+        const marker = L.marker([position.lat, position.lng], { icon }).on('click', () => onSelectTruck(route.truck.id))
+        layer.addLayer(marker)
+        bounds.push([position.lat, position.lng])
+      })
+
+      if (bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 10 })
+    }
+
+    renderLeaflet()
+    return () => {
+      cancelled = true
+    }
+  }, [apiKey, googleFailed, googleReady, onSelectTruck, routes, selectedTruck, stops, tick])
+
+  return (
+    <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
+      <div ref={mapRef} className="absolute inset-0" />
+      {apiKey && !googleReady && !googleFailed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 text-sm">
+          Loading Google Maps...
+        </div>
+      )}
+    </div>
+  )
 }
 
 function statusLabel(status: Truck['status']) {
@@ -376,61 +599,7 @@ export default function RoutesPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-900 overflow-hidden min-h-[560px] relative">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(135deg,#0f172a,#111827_48%,#052e2b)]" />
-          <div className="absolute inset-0 opacity-25" style={{ backgroundImage: 'linear-gradient(rgba(148,163,184,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.18) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
-
-          <div className="absolute left-[8%] top-[12%] rounded-full border border-slate-500/30 bg-slate-950/70 px-3 py-2 text-xs text-slate-300">
-            {HOME_BASE.label}
-          </div>
-
-          {visibleStops.map(stop => {
-            const point = mapPoint(roughCoord(stop).lat, roughCoord(stop).lng)
-            const urgent = stop.equipment.filter(needsSwap).length
-            return (
-              <a
-                key={stop.id}
-                href={mapsSearchUrl(stop)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-lg transition-transform hover:scale-110 ${urgent ? 'bg-red-500 border-white w-8 h-8' : 'bg-green-500 border-slate-950 w-6 h-6'}`}
-                style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                title={`${stop.name || addressFor(stop)} - ${urgent} swaps`}
-              >
-                <span className="sr-only">{stop.name || addressFor(stop)}</span>
-                {urgent > 0 && <span className="absolute -right-2 -top-2 rounded-full bg-slate-950 border border-white/20 px-1.5 py-0.5 text-[10px] font-bold text-white">{urgent}</span>}
-              </a>
-            )
-          })}
-
-          {routes.map(route => {
-            const live = liveTruckPosition(route.truck, route.stops, tick)
-            const point = mapPoint(live.lat, live.lng)
-            return (
-              <button
-                key={route.truck.id}
-                onClick={() => setSelectedTruck(route.truck.id)}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-bold shadow-xl border transition-transform hover:scale-110 ${selectedTruck === route.truck.id ? 'bg-sky-400 text-slate-950 border-white' : 'bg-slate-950 text-sky-300 border-sky-500/50'}`}
-                style={{ left: `${point.x}%`, top: `${point.y}%` }}
-              >
-                T{route.truck.truck_number}
-              </button>
-            )
-          })}
-
-          <div className="absolute left-4 bottom-4 right-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-            {routes.map(route => (
-              <button
-                key={route.truck.id}
-                onClick={() => setSelectedTruck(route.truck.id)}
-                className={`rounded-xl border px-3 py-2 text-left ${selectedTruck === route.truck.id ? 'border-sky-400 bg-sky-500/15' : 'border-slate-700/60 bg-slate-950/80'}`}
-              >
-                <div className="text-white text-sm font-semibold">Truck {route.truck.truck_number}</div>
-                <div className="text-xs text-slate-400">{statusLabel(route.truck.status)} | {route.stops.length} stops</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <DispatchMap routes={routes} stops={visibleStops} selectedTruck={selectedTruck} tick={tick} onSelectTruck={setSelectedTruck} />
 
         <div className="space-y-4">
           <div className="card">

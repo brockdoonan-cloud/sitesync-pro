@@ -188,6 +188,10 @@ function clean(value: unknown) {
   return String(value ?? '').trim()
 }
 
+function headerKey(value: unknown) {
+  return clean(value).toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 function numberValue(value: unknown) {
   const parsed = Number(String(value ?? '').replace(/[$,]/g, ''))
   return Number.isFinite(parsed) ? parsed : 0
@@ -229,6 +233,59 @@ function operationClass(operation: OperationName) {
   return 'bg-purple-500/10 text-purple-400 border-purple-500/30'
 }
 
+function operationRate(operation: OperationName) {
+  if (operation === 'delivery') return 185
+  if (operation === 'pickup') return 165
+  if (operation === 'water_removal') return 225
+  return 145
+}
+
+function demoInvoiceRows(events: OperationEvent[]): InvoiceRow[] {
+  return events.map(event => {
+    const amount = operationRate(event.operation)
+    return {
+      id: `demo-invoice-${event.id}`,
+      invoice_number: `DEMO-${event.date.replace(/-/g, '')}-${event.binNumber}`,
+      client_name: event.clientName,
+      customer_name: event.clientName,
+      total: amount,
+      amount,
+      balance: amount,
+      status: 'open',
+      invoice_date: event.date,
+      service_date: event.date,
+      source_file: 'Demo daily invoice',
+      source_row: event.sourceRow,
+      audit_hash: hashOperation(event),
+      notes: `${operationLabel(event.operation)} for ${event.projectName} bin ${event.binNumber}`,
+    }
+  })
+}
+
+function workbookKind(workbook: XLSX.WorkBook) {
+  let hasBillingHeaders = false
+  let hasOperationalHeaders = false
+
+  workbook.SheetNames.forEach(sheetName => {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: '' })
+    rows.slice(0, 20).forEach(row => {
+      const headers = row.map(headerKey)
+      if (headers.includes('type') && headers.includes('amount')) hasBillingHeaders = true
+      if (
+        headers.some(header => ['bin', 'binnumber', 'container', 'containernumber'].includes(header)) &&
+        headers.some(header => ['accountname', 'customername', 'clientname'].includes(header)) &&
+        headers.some(header => ['projectname', 'projectnameaddress', 'jobsite', 'jobsitename'].includes(header))
+      ) {
+        hasOperationalHeaders = true
+      }
+    })
+  })
+
+  if (hasBillingHeaders) return 'billing'
+  if (hasOperationalHeaders) return 'operations'
+  return 'unknown'
+}
+
 function hashOperation(event: OperationEvent) {
   let hash = 0
   const text = [event.date, event.binNumber, event.clientName, event.projectName, event.operation, event.sourceRow].join('|')
@@ -243,10 +300,14 @@ function parseBillingWorkbook(file: File): Promise<BillingBatch> {
     reader.onload = () => {
       try {
         const workbook = XLSX.read(reader.result, { type: 'array', cellDates: true })
+        const kind = workbookKind(workbook)
+        if (kind === 'operations') {
+          throw new Error('This is an Orlando operations report, not a billing export. Use Operator > Bulk Import for bins/jobsites/service activity. Billing accepts the Atlantic Concrete invoice export with Type and Amount columns.')
+        }
         const sheet = workbook.Sheets[workbook.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
-        const headerIndex = rows.findIndex(row => row.some(value => clean(value).toLowerCase() === 'type') && row.some(value => clean(value).toLowerCase() === 'amount'))
-        if (headerIndex === -1) throw new Error('Could not find Type/Amount billing headers.')
+        const headerIndex = rows.findIndex(row => row.some(value => headerKey(value) === 'type') && row.some(value => headerKey(value) === 'amount'))
+        if (headerIndex === -1) throw new Error('Could not find Type/Amount billing headers. Drop the Atlantic billing export here, or use Operator > Bulk Import for Orlando operations reports.')
 
         const headers = rows[headerIndex].map(clean)
         const indexFor = (name: string) => headers.findIndex(header => header.toLowerCase() === name.toLowerCase())
@@ -386,6 +447,10 @@ export default function BillingPage() {
       return !needle || text.includes(needle)
     })
   }, [demoEvents, query])
+  const visibleDemoInvoices = useMemo(() => demoInvoiceRows(filteredDemoEvents), [filteredDemoEvents])
+  const displayInvoices = useMemo(() => (
+    visibleInvoices.length > 0 ? visibleInvoices : visibleDemoInvoices
+  ), [visibleDemoInvoices, visibleInvoices])
   const realServiceBinSet = useMemo(() => new Set(visibleServices.flatMap(service => [service.bin_number, service.notes?.match(/\b\d{4,}\b/)?.[0]].filter(Boolean) as string[])), [visibleServices])
   const unmatchedDailyEvents = filteredDemoEvents.filter(event => realServiceBinSet.size > 0 && !realServiceBinSet.has(event.binNumber))
   const operationTotals = demoReport?.totals || {
@@ -398,13 +463,13 @@ export default function BillingPage() {
   const totals = useMemo(() => {
     const activeRows = invoices.filter(invoice => !['paid', 'void', 'cancelled'].includes(invoice.status || ''))
     return {
-      dayRevenue: visibleInvoices.reduce((sum, invoice) => sum + Number(invoice.total || invoice.amount || 0), 0),
+      dayRevenue: displayInvoices.reduce((sum, invoice) => sum + Number(invoice.total || invoice.amount || 0), 0),
       activeBalance: activeRows.reduce((sum, invoice) => sum + Number(invoice.balance || invoice.total || invoice.amount || 0), 0),
       paidTotal: invoices.filter(invoice => invoice.status === 'paid').reduce((sum, invoice) => sum + Number(invoice.total || invoice.amount || 0), 0),
-      openCount: invoices.filter(invoice => invoice.status !== 'paid').length,
+      openCount: displayInvoices.filter(invoice => invoice.status !== 'paid').length,
       dailyOps: operationTotals.delivery + operationTotals.pickup + operationTotals.water_removal + operationTotals.relocate,
     }
-  }, [invoices, operationTotals.delivery, operationTotals.pickup, operationTotals.relocate, operationTotals.water_removal, visibleInvoices])
+  }, [displayInvoices, invoices, operationTotals.delivery, operationTotals.pickup, operationTotals.relocate, operationTotals.water_removal])
 
   const billingLinesForDay = useMemo(() => (batch?.lines || []).filter(line => line.date === selectedDate || !selectedDate), [batch, selectedDate])
   const unmatchedBillingLines = useMemo(() => billingLinesForDay.filter(line => {
@@ -424,7 +489,12 @@ export default function BillingPage() {
       setMessage(`Parsed ${parsed.lines.length} billing lines from ${file.name}. Review the trace before saving.`)
     } catch (err) {
       setBatch(null)
-      setError(err instanceof Error ? err.message : 'Could not parse billing file.')
+      const text = err instanceof Error ? err.message : 'Could not parse billing file.'
+      if (text.startsWith('This is an Orlando operations report')) {
+        setMessage(text)
+      } else {
+        setError(text)
+      }
     }
   }
 
@@ -529,7 +599,7 @@ export default function BillingPage() {
   }
 
   const exportAuditDay = () => {
-    const invoiceRows = visibleInvoices.map(invoice => ({
+    const invoiceRows = displayInvoices.map(invoice => ({
       type: 'invoice',
       date: asDateInput(invoice.invoice_date || invoice.service_date || invoice.created_at),
       number: invoice.invoice_number,
@@ -587,7 +657,7 @@ export default function BillingPage() {
           <input type="date" className="input w-full sm:w-auto" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} />
           <input className="input w-full sm:w-64" placeholder="Search invoice, client, bin, address..." value={query} onChange={event => setQuery(event.target.value)} />
           <button onClick={load} className="btn-secondary px-4 py-2">Refresh</button>
-          <button onClick={exportAuditDay} disabled={!visibleInvoices.length && !visibleServices.length} className="btn-primary px-4 py-2 disabled:opacity-50">Export Day</button>
+          <button onClick={exportAuditDay} disabled={!displayInvoices.length && !visibleServices.length && !filteredDemoEvents.length} className="btn-primary px-4 py-2 disabled:opacity-50">Export Day</button>
         </div>
       </div>
 
@@ -762,7 +832,7 @@ export default function BillingPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <section className="card space-y-3">
           <h2 className="font-semibold text-white">Invoices for {selectedDate}</h2>
-          {loading ? <p className="text-slate-400 text-sm">Loading billing records...</p> : visibleInvoices.length > 0 ? visibleInvoices.map(invoice => {
+          {loading ? <p className="text-slate-400 text-sm">Loading billing records...</p> : displayInvoices.length > 0 ? displayInvoices.map(invoice => {
             const amount = invoice.total || invoice.amount || 0
             const invoiceNumber = invoice.invoice_number || invoice.id.slice(0, 8)
             return (
