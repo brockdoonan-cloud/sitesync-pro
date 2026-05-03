@@ -305,6 +305,10 @@ function routeStopType(stop: Stop) {
   return stop.request?.service_type || (stop.equipment.some(needsSwap) ? 'swap' : 'service')
 }
 
+function jobsiteNameFromNotes(notes?: string | null) {
+  return notes?.match(/Jobsite:\s*([^.]+)/i)?.[1]?.trim()
+}
+
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
@@ -527,7 +531,7 @@ export default function RoutesPage() {
   const [loading, setLoading] = useState(true)
   const [savingPlan, setSavingPlan] = useState(false)
   const [message, setMessage] = useState('')
-  const [manual, setManual] = useState({ address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+  const [manual, setManual] = useState({ jobsiteName: '', address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
   const [usingDemo, setUsingDemo] = useState(true)
   const [filter, setFilter] = useState<'swap' | 'all'>('swap')
   const [selectedTruck, setSelectedTruck] = useState(DEMO_TRUCKS[0].id)
@@ -563,14 +567,15 @@ export default function RoutesPage() {
       const linkedEquipment = request.bin_number
         ? (equipment || []).filter((item: Equipment) => item.bin_number === request.bin_number)
         : []
+      const jobsiteName = jobsiteNameFromNotes(request.notes)
       return {
         id: `request-${request.id}`,
-        name: `${(request.service_type || 'service').replace(/_/g, ' ')} request`,
+        name: jobsiteName || linkedSite?.name || `${(request.service_type || 'service').replace(/_/g, ' ')} request`,
         address: request.jobsite_address || request.service_address || linkedSite?.address || 'Orlando, FL',
         lat: linkedSite?.lat,
         lng: linkedSite?.lng,
         status: request.status || 'dispatch_ready',
-        equipment: linkedEquipment.length ? linkedEquipment : request.bin_number ? [{ id: `request-bin-${request.id}`, bin_number: request.bin_number, status: 'needs_swap', location: request.jobsite_address || request.service_address || 'Requested jobsite' }] : [],
+        equipment: linkedEquipment.length ? linkedEquipment : request.bin_number ? [{ id: `request-bin-${request.id}`, bin_number: request.bin_number, status: 'needs_swap', location: request.jobsite_address || request.service_address || jobsiteName || 'Requested jobsite' }] : [],
         request,
         priorityScore: requestPriorityScore(request),
       }
@@ -621,17 +626,20 @@ export default function RoutesPage() {
   const dispatchRequests = sites.filter(site => site.request).length
 
   const createManualSwap = async () => {
-    if (!manual.address.trim()) {
-      setMessage('Enter a jobsite address before adding a manual swap.')
+    const jobsiteName = manual.jobsiteName.trim()
+    const address = manual.address.trim()
+    const location = address || jobsiteName
+    if (!location) {
+      setMessage('Enter a jobsite name or address before adding a manual swap.')
       return
     }
     setLoading(true)
     setMessage('')
-    const notes = [`Manual dispatch entry.`, manual.binNumber ? `Bin #${manual.binNumber}.` : '', manual.notes].filter(Boolean).join(' ')
+    const notes = [`Manual dispatch entry.`, jobsiteName ? `Jobsite: ${jobsiteName}.` : '', manual.binNumber ? `Bin #${manual.binNumber}.` : '', manual.notes].filter(Boolean).join(' ')
     const { error } = await supabase.from('service_requests').insert({
       service_type: manual.serviceType,
-      jobsite_address: manual.address,
-      service_address: manual.address,
+      jobsite_address: location,
+      service_address: location,
       bin_number: manual.binNumber || null,
       preferred_date: manual.date || null,
       scheduled_date: manual.date || null,
@@ -644,7 +652,7 @@ export default function RoutesPage() {
       setLoading(false)
       return
     }
-    setManual({ address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+    setManual({ jobsiteName: '', address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
     setMessage('Manual dispatch stop added and routed.')
     await load()
   }
@@ -776,7 +784,11 @@ export default function RoutesPage() {
         <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
           <div className="flex flex-col md:flex-row md:items-end gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-400 mb-1">Manual jobsite address</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Jobsite name or project</label>
+              <input className="input" value={manual.jobsiteName} onChange={event => setManual(prev => ({ ...prev, jobsiteName: event.target.value }))} placeholder="Project Neptune, Cocoa, Reserve of Twin Lakes..." />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Address if known</label>
               <input className="input" value={manual.address} onChange={event => setManual(prev => ({ ...prev, address: event.target.value }))} placeholder="123 Jobsite Rd, Orlando, FL" />
             </div>
             <div className="md:w-36">
