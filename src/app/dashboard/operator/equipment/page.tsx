@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 function statusClass(status?: string) {
   if (status === 'deployed') return 'bg-green-500/10 text-green-400 border-green-500/30'
   if (status === 'available') return 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+  if (status === 'in_transit') return 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
   if (status === 'needs_swap' || status === 'full') return 'bg-red-500/10 text-red-400 border-red-500/30'
   if (status === 'maintenance') return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
   return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
@@ -30,6 +31,7 @@ export default async function EquipmentPage() {
           { label: 'Total Units', value: rows.length, className: 'bg-slate-700/40 text-white border-slate-600/40' },
           { label: 'Deployed', value: rows.filter((item: any) => item.status === 'deployed').length, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
           { label: 'Available', value: rows.filter((item: any) => item.status === 'available').length, className: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+          { label: 'In Transit', value: rows.filter((item: any) => item.status === 'in_transit').length, className: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20' },
           { label: 'Needs Swap', value: swapNeeded, className: 'bg-red-500/10 text-red-400 border-red-500/20' },
         ].map(stat => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.className}`}>

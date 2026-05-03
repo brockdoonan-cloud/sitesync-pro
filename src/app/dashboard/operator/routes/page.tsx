@@ -331,6 +331,11 @@ function routeAddressesForStop(stop: Stop) {
   ].filter(Boolean) as string[]
 }
 
+function binNumberForStop(stop: Stop) {
+  const plan = swapPlanFromNotes(stop.request?.notes)
+  return plan.pickupBin || stop.request?.bin_number || stop.equipment.find(item => item.bin_number)?.bin_number || ''
+}
+
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
@@ -753,6 +758,116 @@ export default function RoutesPage() {
     }
   }
 
+  const findOrCreateDropoffJobsite = async (name?: string, address?: string) => {
+    const cleanName = name?.trim() || ''
+    const cleanAddress = address?.trim() || ''
+    if (!cleanName && !cleanAddress) return null
+
+    const { data: existingByAddress } = cleanAddress
+      ? await supabase.from('jobsites').select('id').eq('address', cleanAddress).limit(1)
+      : { data: null }
+    if (existingByAddress?.[0]?.id) return existingByAddress[0].id as string
+
+    const { data: existingByName } = cleanName
+      ? await supabase.from('jobsites').select('id').eq('name', cleanName).limit(1)
+      : { data: null }
+    if (existingByName?.[0]?.id) return existingByName[0].id as string
+
+    const { data: created, error } = await supabase
+      .from('jobsites')
+      .insert({
+        name: cleanName || cleanAddress,
+        address: cleanAddress || cleanName,
+        status: 'active',
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    return created.id as string
+  }
+
+  const markStopInMotion = async (stop: Stop) => {
+    const binNumber = binNumberForStop(stop)
+    if (!binNumber) {
+      setMessage('No bin number is attached to this stop, so inventory could not be updated.')
+      return
+    }
+    const plan = swapPlanFromNotes(stop.request?.notes)
+    const transitLocation = `In transit from ${stop.name || addressFor(stop)}${plan.landfill ? ` to ${plan.landfill}` : ''}`
+    setMessage('')
+    const { error } = await supabase
+      .from('equipment')
+      .update({
+        status: 'in_transit',
+        location: transitLocation,
+        jobsite_id: null,
+        last_serviced_at: new Date().toISOString(),
+      })
+      .eq('bin_number', binNumber)
+    if (error) {
+      setMessage(`Could not mark bin #${binNumber} in motion: ${error.message}`)
+      return
+    }
+    if (stop.request?.id) {
+      await supabase
+        .from('service_requests')
+        .update({
+          status: 'in_progress',
+          notes: [stop.request.notes, `Bin #${binNumber} picked up and marked in transit.`].filter(Boolean).join('\n'),
+        })
+        .eq('id', stop.request.id)
+    }
+    setMessage(`Bin #${binNumber} is now in transit and removed from the old jobsite.`)
+    await load()
+  }
+
+  const completeStopInventory = async (stop: Stop) => {
+    const binNumber = binNumberForStop(stop)
+    if (!binNumber) {
+      setMessage('No bin number is attached to this stop, so inventory could not be completed.')
+      return
+    }
+    const plan = swapPlanFromNotes(stop.request?.notes)
+    const serviceType = routeStopType(stop).toLowerCase()
+    const finalName = plan.dropoffJobsite || (serviceType === 'delivery' ? stop.name : '')
+    const finalAddress = plan.dropoffAddress || (serviceType === 'delivery' ? addressFor(stop) : '')
+    const finalLocation = finalAddress || finalName || HOME_BASE.address
+    const finalStatus = serviceType === 'pickup' && !plan.dropoffJobsite && !plan.dropoffAddress ? 'available' : 'deployed'
+    const finalJobsiteId = finalStatus === 'deployed' ? await findOrCreateDropoffJobsite(finalName, finalAddress) : null
+
+    setMessage('')
+    const { error } = await supabase
+      .from('equipment')
+      .update({
+        status: finalStatus,
+        location: finalLocation,
+        jobsite_id: finalJobsiteId,
+        last_serviced_at: new Date().toISOString(),
+      })
+      .eq('bin_number', binNumber)
+    if (error) {
+      setMessage(`Could not complete bin #${binNumber}: ${error.message}`)
+      return
+    }
+
+    if (stop.request?.id) {
+      await supabase
+        .from('service_requests')
+        .update({
+          status: 'completed',
+          notes: [
+            stop.request.notes,
+            `Completed inventory move for bin #${binNumber}. Final status: ${finalStatus}. Final location: ${finalLocation}.`,
+          ].filter(Boolean).join('\n'),
+        })
+        .eq('id', stop.request.id)
+      await supabase.from('route_stops').update({ status: 'completed' }).eq('service_request_id', stop.request.id)
+    }
+
+    setMessage(`Bin #${binNumber} completed: ${finalStatus.replace(/_/g, ' ')} at ${finalLocation}.`)
+    await load()
+  }
+
   const cancelDispatchRequest = async (stop: Stop) => {
     if (!stop.request?.id) return
     setMessage('')
@@ -934,13 +1049,29 @@ export default function RoutesPage() {
                           </div>
                         )}
                         {stop.request && (
-                          <button
-                            type="button"
-                            onClick={() => cancelDispatchRequest(stop)}
-                            className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-500/20"
-                          >
-                            Cancel dispatch stop
-                          </button>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => markStopInMotion(stop)}
+                              className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-xs font-medium text-yellow-200 hover:bg-yellow-500/20"
+                            >
+                              Mark picked up
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => completeStopInventory(stop)}
+                              className="rounded-lg border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs font-medium text-green-300 hover:bg-green-500/20"
+                            >
+                              Complete drop/swap
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cancelDispatchRequest(stop)}
+                              className="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-500/20"
+                            >
+                              Cancel dispatch stop
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
