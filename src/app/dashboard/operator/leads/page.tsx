@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 
 type Lead = {
   id: string; name: string; email: string; phone?: string;
@@ -133,6 +134,13 @@ export default function LeadsPage() {
                     {lead.phone && <span>{lead.phone}</span>}
                   </div>
                 </div>
+                <Link
+                  href={`/dashboard/operator/leads/${lead.id}`}
+                  onClick={event => event.stopPropagation()}
+                  className="shrink-0 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-400 hover:bg-sky-500/20"
+                >
+                  Send Quote
+                </Link>
                 <div className="text-right shrink-0 text-slate-500 text-xs">
                   {new Date(lead.created_at).toLocaleDateString()}
                 </div>

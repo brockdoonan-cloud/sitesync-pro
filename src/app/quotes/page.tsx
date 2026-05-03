@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useLanguage } from '@/lib/i18n'
 
@@ -26,7 +25,7 @@ export default function QuotesPage() {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
-  const supabase = createClient()
+  const [magicLink, setMagicLink] = useState('')
 
   const handleSubmit = async () => {
     if (!address || !city || !zip || !equipmentType || !jobType) {
@@ -39,15 +38,34 @@ export default function QuotesPage() {
     }
     setLoading(true)
     setError('')
-    const requestNotes = [`Exact address: ${address}`, notes].filter(Boolean).join('\n\n')
-    const { error: err } = await supabase.from('quote_requests').insert({
-      name, email, phone: phone || null, city, zip,
-      equipment_type: equipmentType, dumpster_size: dumpsterSize || null,
-      start_date: startDate || null, end_date: endDate || null,
-      job_type: jobType, notes: requestNotes, status: 'open',
+    const response = await fetch('/api/quote-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        email,
+        phone: phone || null,
+        address,
+        city,
+        zip,
+        equipment_type: equipmentType,
+        dumpster_size: dumpsterSize || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        job_type: jobType,
+        notes,
+      }),
     })
-    if (err) { setError(err.message); setLoading(false) }
-    else { setSubmitted(true) }
+    const payload = await response.json()
+    setLoading(false)
+    if (!response.ok) {
+      setError(payload.error || 'Could not submit quote request.')
+      return
+    }
+    if (payload.request?.access_token) {
+      setMagicLink(`${window.location.origin}/quote/${payload.request.access_token}`)
+    }
+    setSubmitted(true)
   }
 
   const shareQuoteLink = async () => {
@@ -76,8 +94,13 @@ export default function QuotesPage() {
             <span className="text-sky-400 font-semibold">{city}, {zip}</span>.
           </p>
           <p className="text-slate-500 text-sm mb-8">
-            {t('quotesSentTo')} <strong className="text-slate-300">{email}</strong>.
+            {t('quotesSentTo')} <strong className="text-slate-300">{email}</strong>. We also sent your tracking link for comparing responses.
           </p>
+          {magicLink && (
+            <Link href={magicLink} className="mb-6 inline-flex rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-400 hover:bg-sky-500/20">
+              View quote responses
+            </Link>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button onClick={() => setSubmitted(false)} className="btn-secondary px-6 py-2.5">{t('submitAnother')}</button>
             <button onClick={shareQuoteLink} className="btn-secondary px-6 py-2.5">
