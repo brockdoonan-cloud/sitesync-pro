@@ -705,6 +705,24 @@ export default function RoutesPage() {
     }
   }
 
+  const cancelDispatchRequest = async (stop: Stop) => {
+    if (!stop.request?.id) return
+    setMessage('')
+    const { error } = await supabase
+      .from('service_requests')
+      .update({
+        status: 'cancelled',
+        notes: [stop.request.notes, 'Cancelled by dispatch before route completion.'].filter(Boolean).join('\n'),
+      })
+      .eq('id', stop.request.id)
+    if (error) {
+      setMessage(`Could not cancel stop: ${error.message}`)
+      return
+    }
+    setMessage('Dispatch stop cancelled and removed from active routing.')
+    await load()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
@@ -840,6 +858,15 @@ export default function RoutesPage() {
                         <div className="text-sm font-medium text-white truncate">{stop.name || addressFor(stop)}</div>
                         <div className="text-xs text-slate-400 truncate">{addressFor(stop)}</div>
                         <div className="text-xs text-slate-500 mt-1">{(stop.distanceFromPrevious || 0).toFixed(1)} mi | {urgent.length} swap bins | {stop.equipment.length} total bins</div>
+                        {stop.request && (
+                          <button
+                            type="button"
+                            onClick={() => cancelDispatchRequest(stop)}
+                            className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-300 hover:bg-red-500/20"
+                          >
+                            Cancel dispatch stop
+                          </button>
+                        )}
                       </div>
                     </div>
                   )

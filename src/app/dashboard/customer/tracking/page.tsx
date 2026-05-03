@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/i18n'
 
@@ -19,12 +19,17 @@ type ServiceRequest = {
   preferred_date?: string | null
 }
 
-const activeStatuses = ['pending', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'in_progress', 'completed']
+const activeStatuses = ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'in_progress', 'completed']
 
 function normalizeStatus(status?: string | null) {
+  if (status === 'dispatch_ready') return 'pending'
   if (status === 'confirmed') return 'scheduled'
   if (status === 'dispatched' || status === 'in_progress') return 'en_route'
   return status || 'pending'
+}
+
+function canCancel(status?: string | null) {
+  return ['pending', 'dispatch_ready', 'scheduled', 'confirmed'].includes(status || 'pending')
 }
 
 function titleize(value?: string | null) {
@@ -69,53 +74,66 @@ export default function TrackingPage() {
   const [requests, setRequests] = useState<ServiceRequest[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState('')
   const [error, setError] = useState('')
+
+  const loadRequests = useCallback(async () => {
+    setLoading(true)
+    setError('')
+
+    const supabase = createClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setError(t('signInTracking'))
+      setLoading(false)
+      return
+    }
+
+    const { data, error: requestError } = await supabase
+      .from('service_requests')
+      .select('*')
+      .eq('customer_id', user.id)
+      .in('status', activeStatuses)
+      .order('created_at', { ascending: false })
+
+    if (requestError) {
+      setError(requestError.message)
+      setRequests([])
+    } else {
+      const rows = (data || []) as ServiceRequest[]
+      setRequests(rows)
+      setSelectedId(current => current && rows.some(row => row.id === current) ? current : rows[0]?.id ?? null)
+    }
+
+    setLoading(false)
+  }, [t])
 
   useEffect(() => {
     let isMounted = true
 
-    async function loadRequests() {
-      setLoading(true)
-      setError('')
-
-      const supabase = createClient()
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-      if (userError || !user) {
-        if (isMounted) {
-          setError(t('signInTracking'))
-          setLoading(false)
-        }
-        return
-      }
-
-      const { data, error: requestError } = await supabase
-        .from('service_requests')
-        .select('*')
-        .eq('customer_id', user.id)
-        .in('status', activeStatuses)
-        .order('created_at', { ascending: false })
-
+    loadRequests().then(() => {
       if (!isMounted) return
-
-      if (requestError) {
-        setError(requestError.message)
-        setRequests([])
-      } else {
-        const rows = (data || []) as ServiceRequest[]
-        setRequests(rows)
-        setSelectedId(rows[0]?.id ?? null)
-      }
-
-      setLoading(false)
-    }
-
-    loadRequests()
+    })
 
     return () => {
       isMounted = false
     }
-  }, [t])
+  }, [loadRequests])
+
+  const cancelRequest = async (request: ServiceRequest) => {
+    if (!canCancel(request.status)) return
+    setActionLoading(request.id)
+    setError('')
+    const supabase = createClient()
+    const { error: cancelError } = await supabase
+      .from('service_requests')
+      .update({ status: 'cancelled', notes: [request.notes, 'Cancelled by customer before dispatch.'].filter(Boolean).join('\n') })
+      .eq('id', request.id)
+    if (cancelError) setError(cancelError.message)
+    else await loadRequests()
+    setActionLoading('')
+  }
 
   const selectedRequest = useMemo(
     () => requests.find(request => request.id === selectedId) || requests[0],
@@ -194,6 +212,26 @@ export default function TrackingPage() {
                     <div>{t('scheduledLabel')}: <span className="text-slate-200">{requestDate(request, t('datePending'))}</span></div>
                     {request.notes && <div>{t('notesLabel')}: <span className="text-slate-200">{request.notes}</span></div>}
                   </div>
+
+                  {canCancel(request.status) && (
+                    <div className="mt-4 flex justify-end">
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={event => { event.stopPropagation(); cancelRequest(request) }}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            cancelRequest(request)
+                          }
+                        }}
+                        className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
+                      >
+                        {actionLoading === request.id ? 'Cancelling...' : 'Cancel request'}
+                      </span>
+                    </div>
+                  )}
                 </button>
               )
             })}

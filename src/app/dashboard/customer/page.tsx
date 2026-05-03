@@ -14,7 +14,7 @@ export default async function CustomerDashboard() {
     supabase.from('equipment').select('*', { count: 'exact', head: true }),
     supabase.from('equipment').select('*', { count: 'exact', head: true }).eq('status', 'deployed'),
   ])
-  const activeRequests = requests?.filter((r: any) => ['pending', 'confirmed', 'in_progress'].includes(r.status)).length ?? 0
+  const activeRequests = requests?.filter((r: any) => ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'in_progress'].includes(r.status)).length ?? 0
 
   const actions = [
     { href: '/dashboard/customer/request', label: 'Request Service', desc: 'Schedule swap, pickup, or delivery' },
