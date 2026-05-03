@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Jobsite = {
@@ -578,20 +579,36 @@ export default function RoutesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     setMessage('')
-    const [{ data: jobsites }, { data: equipment }, { data: truckRows }, { data: serviceRequests }] = await Promise.all([
-      supabase.from('jobsites').select('id,name,address,city,state,zip,lat,lng,status').order('status', { ascending: true }),
-      supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }),
-      supabase.from('trucks').select('id,truck_number,status').order('truck_number', { ascending: true }),
-      supabase
-        .from('service_requests')
-        .select('id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
-        .in('status', ['dispatch_ready', 'pending', 'scheduled', 'confirmed', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(100),
+    const [jobsites, equipment, truckRows, serviceRequests] = await Promise.all([
+      fetchAllRows<Jobsite>((from, to) =>
+        supabase.from('jobsites').select('id,name,address,city,state,zip,lat,lng,status').order('status', { ascending: true }).range(from, to)
+      ),
+      fetchAllRows<Equipment>((from, to) =>
+        supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }).range(from, to)
+      ),
+      fetchAllRows<any>((from, to) =>
+        supabase.from('trucks').select('id,truck_number,status').order('truck_number', { ascending: true }).range(from, to)
+      ),
+      fetchAllRows<ServiceRequest>((from, to) =>
+        supabase
+          .from('service_requests')
+          .select('id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
+          .in('status', ['dispatch_ready', 'pending', 'scheduled', 'confirmed', 'in_progress'])
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      ),
     ])
 
-    const mappedSites: Stop[] = (jobsites || []).map((site: Jobsite) => {
-      const siteEquipment = (equipment || []).filter((item: Equipment) => item.jobsite_id === site.id)
+    const equipmentByJobsite = new Map<string, Equipment[]>()
+    equipment.forEach(item => {
+      if (!item.jobsite_id) return
+      const current = equipmentByJobsite.get(item.jobsite_id) || []
+      current.push(item)
+      equipmentByJobsite.set(item.jobsite_id, current)
+    })
+
+    const mappedSites: Stop[] = jobsites.map((site: Jobsite) => {
+      const siteEquipment = equipmentByJobsite.get(site.id) || []
       return {
         ...site,
         equipment: siteEquipment,
@@ -602,7 +619,7 @@ export default function RoutesPage() {
     const requestStops = (serviceRequests || []).map((request: ServiceRequest) => {
       const linkedSite = mappedSites.find(site => site.id === request.jobsite_id)
       const linkedEquipment = request.bin_number
-        ? (equipment || []).filter((item: Equipment) => item.bin_number === request.bin_number)
+        ? equipment.filter((item: Equipment) => item.bin_number === request.bin_number)
         : []
       const jobsiteName = jobsiteNameFromNotes(request.notes)
       return {
@@ -620,7 +637,7 @@ export default function RoutesPage() {
 
     const mapped = [...requestStops, ...mappedSites]
 
-    const liveTrucks = (truckRows || []).slice(0, 4).map((truck: any, index: number) => ({
+    const liveTrucks = (truckRows || []).map((truck: any, index: number) => ({
       id: truck.id,
       truck_number: truck.truck_number || String(index + 1),
       driver: `Driver ${index + 1}`,
@@ -648,9 +665,10 @@ export default function RoutesPage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
+    if (!usingDemo) return
     const timer = window.setInterval(() => setTick(value => value + 1), 2500)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [usingDemo])
 
   const swapStops = useMemo(() => sites.filter(site => site.equipment.some(needsSwap)), [sites])
   const visibleStops = filter === 'swap' ? swapStops : sites
@@ -994,7 +1012,7 @@ export default function RoutesPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <DispatchMap routes={routes} stops={visibleStops} selectedTruck={selectedTruck} tick={tick} onSelectTruck={setSelectedTruck} />
+        <DispatchMap routes={routes} stops={visibleStops} selectedTruck={selectedTruck} tick={usingDemo ? tick : 0} onSelectTruck={setSelectedTruck} />
 
         <div className="space-y-4">
           <div className="card">

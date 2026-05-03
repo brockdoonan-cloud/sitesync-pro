@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/i18n'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Jobsite = {
@@ -308,10 +309,9 @@ function FallbackEquipmentMap({
       const bounds: [number, number][] = []
       visibleBinMarkers.forEach(({ site, item, position }) => {
         const swap = needsSwap(item)
-        const active = selected?.id === site.id
         const icon: DivIcon = L.divIcon({
           className: '',
-          html: `<button class="bin-map-pin ${swap ? 'bin-map-pin-swap' : 'bin-map-pin-ok'} ${active ? 'bin-map-pin-active' : ''}">${markerLabel(item)}</button>`,
+          html: `<button class="bin-map-pin ${swap ? 'bin-map-pin-swap' : 'bin-map-pin-ok'}">${markerLabel(item)}</button>`,
           iconSize: [34, 28],
           iconAnchor: [17, 28],
         })
@@ -322,7 +322,7 @@ function FallbackEquipmentMap({
         bounds.push([position.lat, position.lng])
       })
 
-      if (bounds.length && !selected) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 })
+      if (bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 })
     }
 
     renderMarkers()
@@ -330,7 +330,7 @@ function FallbackEquipmentMap({
     return () => {
       cancelled = true
     }
-  }, [onSelect, selected, t, visibleBinMarkers])
+  }, [onSelect, t, visibleBinMarkers])
 
   useEffect(() => {
     const timer = window.setTimeout(() => leafletMap.current?.invalidateSize(), 100)
@@ -403,33 +403,34 @@ function GoogleEquipmentMap({
         const position = await positionFor(site)
         if (cancelled || !position) continue
         const equipment = site.equipment.length ? site.equipment : [{ id: `${site.id}-empty`, status: site.status, location: site.address }]
-        equipment.forEach((item, index) => {
-          const itemPosition = binMarkerPosition(position, index, equipment.length)
-          const swap = needsSwap(item)
-          const marker = new google.maps.Marker({
-            map,
-            position: itemPosition,
-            title: `${t('binNumber')} ${item.bin_number || t('unassigned')} - ${site.address || t('jobsiteMap')}`,
-            label: { text: item.bin_number ? markerLabel(item) : String(site.equipment.length), color: '#ffffff', fontWeight: '700', fontSize: '11px' },
-            icon: {
-              path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-              fillColor: swap ? '#ef4444' : '#22c55e',
-              fillOpacity: 1,
-              strokeColor: selected?.id === site.id ? '#ffffff' : '#0f172a',
-              strokeWeight: selected?.id === site.id ? 3 : 2,
-              scale: swap ? 1.45 : 1.25,
-              anchor: new google.maps.Point(12, 24),
-            },
-          })
-          const info = new google.maps.InfoWindow({
-            content: `<div style="font-family:system-ui;min-width:220px"><strong>${t('binNumber')} ${item.bin_number || t('unassigned')}</strong><br/>${site.address || t('jobsiteMap')}<br/>${t('status')}: ${swap ? t('swapNeeded') : item.status || t('unknown')}<br/>${t('location')}: ${item.location || site.address || t('onSite')}</div>`,
-          })
-          marker.addListener('click', () => {
-            onSelect(site.id)
-            info.open(map, marker)
-          })
-          bounds.extend(itemPosition)
+        const swapCount = equipment.filter(needsSwap).length
+        const marker = new google.maps.Marker({
+          map,
+          position,
+          title: `${site.address || t('jobsiteMap')} - ${equipment.length} bins`,
+          label: { text: String(swapCount || equipment.length), color: '#ffffff', fontWeight: '800', fontSize: '12px' },
+          icon: {
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+            fillColor: swapCount ? '#ef4444' : '#22c55e',
+            fillOpacity: 1,
+            strokeColor: '#0f172a',
+            strokeWeight: 2,
+            scale: swapCount ? 1.55 : 1.35,
+            anchor: new google.maps.Point(12, 24),
+          },
         })
+        const sampleBins = equipment
+          .slice(0, 12)
+          .map(item => item.bin_number || item.id.slice(0, 6))
+          .join(', ')
+        const info = new google.maps.InfoWindow({
+          content: `<div style="font-family:system-ui;min-width:240px"><strong>${site.address || t('jobsiteMap')}</strong><br/>${equipment.length} bins on site<br/>${swapCount} need service<br/>${sampleBins ? `Bins: ${sampleBins}${equipment.length > 12 ? '...' : ''}` : ''}</div>`,
+        })
+        marker.addListener('click', () => {
+          onSelect(site.id)
+          info.open(map, marker)
+        })
+        bounds.extend(position)
       }
       if (!cancelled && sites.length > 0) map.fitBounds(bounds)
     }
@@ -438,7 +439,7 @@ function GoogleEquipmentMap({
     return () => {
       cancelled = true
     }
-  }, [onSelect, ready, selected?.id, sites, t])
+  }, [onSelect, ready, sites, t])
 
   if (!apiKey || failed) return <FallbackEquipmentMap sites={sites} selected={selected} onSelect={onSelect} />
 
@@ -465,16 +466,27 @@ export default function MapPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
-    const [{ data: jobsites }, { data: equipment }] = await Promise.all([
-      supabase.from('jobsites').select('id,address,lat,lng,status').order('status', { ascending: true }),
-      supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }),
+    const [jobsites, equipment] = await Promise.all([
+      fetchAllRows<Jobsite>((from, to) =>
+        supabase.from('jobsites').select('id,address,lat,lng,status').order('status', { ascending: true }).range(from, to)
+      ),
+      fetchAllRows<Equipment>((from, to) =>
+        supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }).range(from, to)
+      ),
     ])
 
     if (jobsites && jobsites.length > 0) {
+      const equipmentByJobsite = new Map<string, Equipment[]>()
+      equipment.forEach(item => {
+        if (!item.jobsite_id) return
+        const current = equipmentByJobsite.get(item.jobsite_id) || []
+        current.push(item)
+        equipmentByJobsite.set(item.jobsite_id, current)
+      })
       const mapped = jobsites.map((site: Jobsite, index: number) => ({
         ...site,
         ...coordToPoint(site, index, jobsites.length),
-        equipment: (equipment || []).filter((item: Equipment) => item.jobsite_id === site.id),
+        equipment: equipmentByJobsite.get(site.id) || [],
       }))
       setSites(mapped)
       setSelectedId(mapped[0]?.id || '')

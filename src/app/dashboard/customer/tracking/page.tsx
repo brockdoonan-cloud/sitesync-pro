@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/i18n'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 type ServiceRequest = {
   id: string
@@ -90,20 +91,21 @@ export default function TrackingPage() {
       return
     }
 
-    const { data, error: requestError } = await supabase
-      .from('service_requests')
-      .select('*')
-      .eq('customer_id', user.id)
-      .in('status', activeStatuses)
-      .order('created_at', { ascending: false })
-
-    if (requestError) {
-      setError(requestError.message)
-      setRequests([])
-    } else {
-      const rows = (data || []) as ServiceRequest[]
+    try {
+      const rows = await fetchAllRows<ServiceRequest>((from, to) =>
+        supabase
+          .from('service_requests')
+          .select('*')
+          .eq('customer_id', user.id)
+          .in('status', activeStatuses)
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
       setRequests(rows)
       setSelectedId(current => current && rows.some(row => row.id === current) ? current : rows[0]?.id ?? null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load service requests.')
+      setRequests([])
     }
 
     setLoading(false)
@@ -182,10 +184,17 @@ export default function TrackingPage() {
               const isSelected = request.id === selectedRequest?.id
 
               return (
-                <button
+                <div
                   key={request.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedId(request.id)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedId(request.id)
+                    }
+                  }}
                   className={`w-full rounded-lg border p-4 text-left transition ${
                     isSelected
                       ? 'border-sky-400 bg-sky-500/10'
@@ -215,9 +224,8 @@ export default function TrackingPage() {
 
                   {canCancel(request.status) && (
                     <div className="mt-4 flex justify-end">
-                      <span
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
                         onClick={event => { event.stopPropagation(); cancelRequest(request) }}
                         onKeyDown={event => {
                           if (event.key === 'Enter' || event.key === ' ') {
@@ -229,10 +237,10 @@ export default function TrackingPage() {
                         className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
                       >
                         {actionLoading === request.id ? 'Cancelling...' : 'Cancel request'}
-                      </span>
+                      </button>
                     </div>
                   )}
-                </button>
+                </div>
               )
             })}
           </section>

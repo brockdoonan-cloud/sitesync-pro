@@ -78,7 +78,7 @@ export default function LeadsPage() {
           <h1 className="text-2xl font-bold text-white">Quote Leads</h1>
           <p className="text-slate-400 mt-1">Equipment rental requests from potential customers</p>
         </div>
-        <a href="/quotes" target="_blank" className="btn-primary text-sm px-4 py-2 flex items-center gap-2">
+        <a href="/quotes" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm px-4 py-2 flex items-center gap-2">
           View Public Form
         </a>
       </div>
@@ -112,7 +112,7 @@ export default function LeadsPage() {
         <div className="card text-center py-12">
           <div className="text-4xl mb-3"></div>
           <h3 className="font-semibold text-white mb-2">No leads yet</h3>
-          <p className="text-slate-400 text-sm">Share the <a href="/quotes" target="_blank" className="text-sky-400 hover:underline">public quote form</a> to start receiving requests.</p>
+          <p className="text-slate-400 text-sm">Share the <a href="/quotes" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">public quote form</a> to start receiving requests.</p>
         </div>
       ) : (
         <div className="space-y-2">

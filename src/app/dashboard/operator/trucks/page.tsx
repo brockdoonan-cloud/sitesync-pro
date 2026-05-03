@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import type { DivIcon, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 type Truck = {
@@ -262,7 +263,9 @@ export default function TrucksPage() {
 
   const loadTrucks = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('trucks').select('*')
+    const data = await fetchAllRows<any>((from, to) =>
+      supabase.from('trucks').select('*').order('truck_number', { ascending: true }).range(from, to)
+    )
     if (data && data.length > 0) {
       setTrucks(data.map((truck: any) => ({
         id: truck.id,
@@ -344,9 +347,17 @@ export default function TrucksPage() {
           {loading ? (
             [1, 2, 3, 4].map(item => <div key={item} className="h-28 bg-slate-800/40 rounded-xl animate-pulse" />)
           ) : trucks.map(truck => (
-            <button
+            <div
               key={truck.id}
+              role="button"
+              tabIndex={0}
               onClick={() => setSelected(selected?.id === truck.id ? null : truck)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setSelected(selected?.id === truck.id ? null : truck)
+                }
+              }}
               className={`w-full text-left rounded-xl border px-4 py-3 cursor-pointer transition-all ${
                 selected?.id === truck.id
                   ? 'bg-sky-500/10 border-sky-500/40'
@@ -379,10 +390,10 @@ export default function TrucksPage() {
               </div>
               {truck.lat && truck.lng && (
                 <div className="text-xs text-slate-600 font-mono mt-1">
-                  {truck.lat.toFixed(4)}, {truck.lng.toFixed(4)}
-                </div>
+                {truck.lat.toFixed(4)}, {truck.lng.toFixed(4)}
+              </div>
               )}
-            </button>
+            </div>
           ))}
         </div>
       </div>

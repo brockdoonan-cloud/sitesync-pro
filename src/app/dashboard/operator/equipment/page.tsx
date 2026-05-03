@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 function statusClass(status?: string) {
   if (status === 'deployed') return 'bg-green-500/10 text-green-400 border-green-500/30'
@@ -11,12 +12,13 @@ function statusClass(status?: string) {
 
 export default async function EquipmentPage() {
   const supabase = createClient()
-  const { data: equipment } = await supabase
-    .from('equipment')
-    .select('id,bin_number,status,location,client_id,jobsite_id,last_serviced_at,created_at')
-    .order('bin_number', { ascending: true })
-
-  const rows = equipment || []
+  const rows = await fetchAllRows<any>((from, to) =>
+    supabase
+      .from('equipment')
+      .select('id,bin_number,status,location,client_id,jobsite_id,last_serviced_at,created_at')
+      .order('bin_number', { ascending: true })
+      .range(from, to)
+  )
   const swapNeeded = rows.filter((item: any) => ['needs_swap', 'full'].includes(item.status)).length
 
   return (

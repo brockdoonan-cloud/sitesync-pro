@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 export default async function ClientsPage() {
   const supabase = createClient()
-  const { data: clients } = await supabase.from('clients').select('*').order('created_at', { ascending: false })
-  const rows = clients || []
+  const rows = await fetchAllRows<any>((from, to) =>
+    supabase.from('clients').select('*').order('created_at', { ascending: false }).range(from, to)
+  )
 
   return (
     <div className="space-y-6">

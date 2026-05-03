@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type PriceLine, type ServiceCode } from '@/lib/pricing'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 type InvoiceRow = {
   id: string
@@ -62,15 +63,20 @@ export default function CustomerBillingPage() {
     async function load() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('id,invoice_number,client_name,customer_name,total,amount,balance,status,invoice_date,service_date,notes,email,client_email')
-        .or(`email.eq.${user?.email || ''},client_email.eq.${user?.email || ''}`)
-        .order('invoice_date', { ascending: false })
-        .limit(100)
-      if (error) setMessage(error.message)
-      const rows = (data || []) as InvoiceRow[]
-      setInvoices(rows.length ? rows : demoInvoices())
+      try {
+        const rows = await fetchAllRows<InvoiceRow>((from, to) =>
+          supabase
+            .from('invoices')
+            .select('id,invoice_number,client_name,customer_name,total,amount,balance,status,invoice_date,service_date,notes,email,client_email')
+            .or(`email.eq.${user?.email || ''},client_email.eq.${user?.email || ''}`)
+            .order('invoice_date', { ascending: false })
+            .range(from, to)
+        )
+        setInvoices(rows.length ? rows : demoInvoices())
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : 'Could not load invoices.')
+        setInvoices(demoInvoices())
+      }
       setLoading(false)
     }
     load()

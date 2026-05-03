@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 type ImportRow = {
   id: string
@@ -230,6 +231,16 @@ function uniqueBy<T>(rows: T[], key: (row: T) => string) {
   })
 }
 
+function normalizedKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function chunks<T>(values: T[], size = 500) {
+  const result: T[][] = []
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size))
+  return result
+}
+
 const emptyStats: ImportStats = {
   clientsCreated: 0,
   clientsReused: 0,
@@ -297,62 +308,77 @@ export default function BulkImportPage() {
         throw new Error(`Database repair is not applied yet: ${failedCheck.error.message}. Run supabase/repair_import_schema.sql in Supabase SQL Editor, then retry import.`)
       }
 
-      for (const row of clients) {
-        const { data: existing } = await supabase
-          .from('clients')
-          .select('id')
-          .ilike('company_name', row.accountName)
-          .limit(1)
+      const [existingClients, existingJobsites, existingEquipment, existingServices] = await Promise.all([
+        fetchAllRows<any>((from, to) => supabase.from('clients').select('id,company_name').range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from('jobsites').select('id,name,address,client_id').range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from('equipment').select('id,bin_number,container_number').range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from('service_requests').select('id,bin_number,jobsite_address,preferred_date,notes').range(from, to)),
+      ])
 
-        if (existing?.[0]?.id) {
-          clientIdByName.set(row.accountName.toLowerCase(), existing[0].id)
-          nextStats.clientsReused++
-          continue
-        }
+      existingClients.forEach(client => {
+        if (client.company_name) clientIdByName.set(normalizedKey(client.company_name), client.id)
+      })
 
-        const { data, error: err } = await supabase
-          .from('clients')
-          .insert({ company_name: row.accountName, status: 'active' })
-          .select('id')
-          .single()
-        if (err) notes.push(`Client ${row.accountName}: ${err.message}`)
-        else {
-          clientIdByName.set(row.accountName.toLowerCase(), data.id)
-          nextStats.clientsCreated++
-        }
+      const newClients = clients
+        .filter(row => !clientIdByName.has(normalizedKey(row.accountName)))
+        .map(row => ({ company_name: row.accountName, status: 'active' }))
+
+      nextStats.clientsReused = clients.length - newClients.length
+      for (const batch of chunks(newClients)) {
+        const { data, error: err } = await supabase.from('clients').insert(batch).select('id,company_name')
+        if (err) notes.push(`Clients: ${err.message}`)
+        else nextStats.clientsCreated += data?.length || batch.length
+        ;(data || []).forEach((client: any) => clientIdByName.set(normalizedKey(client.company_name), client.id))
       }
 
-      for (const row of jobsites) {
-        const clientId = clientIdByName.get(row.accountName.toLowerCase()) || null
-        const { data: existing } = await supabase
-          .from('jobsites')
-          .select('id')
-          .ilike('name', row.projectName)
-          .ilike('address', row.address)
-          .limit(1)
+      existingJobsites.forEach(site => {
+        const key = `${site.client_id || ''}|${normalizedKey(site.name || '')}|${normalizedKey(site.address || '')}`
+        jobsiteIdByKey.set(key, site.id)
+      })
 
-        if (existing?.[0]?.id) {
-          jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), existing[0].id)
+      const newJobsites = jobsites.flatMap(row => {
+        const clientId = clientIdByName.get(normalizedKey(row.accountName)) || null
+        const key = `${clientId || ''}|${normalizedKey(row.projectName)}|${normalizedKey(row.address)}`
+        if (jobsiteIdByKey.has(key)) {
           nextStats.jobsitesReused++
-          continue
+          return []
         }
+        return [{
+          name: row.projectName,
+          address: row.address,
+          city: 'Orlando',
+          state: 'FL',
+          client_id: clientId,
+          status: 'active',
+          lat: row.lat ?? null,
+          lng: row.lng ?? null,
+        }]
+      })
 
-        const { data, error: err } = await supabase
-          .from('jobsites')
-          .insert({ name: row.projectName, address: row.address, city: 'Orlando', state: 'FL', client_id: clientId, status: 'active', lat: row.lat ?? null, lng: row.lng ?? null })
-          .select('id')
-          .single()
-        if (err) notes.push(`Jobsite ${row.projectName}: ${err.message}`)
-        else {
-          jobsiteIdByKey.set(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase(), data.id)
-          nextStats.jobsitesCreated++
-        }
+      for (const batch of chunks(newJobsites)) {
+        const { data, error: err } = await supabase.from('jobsites').insert(batch).select('id,name,address,client_id')
+        if (err) notes.push(`Jobsites: ${err.message}`)
+        else nextStats.jobsitesCreated += data?.length || batch.length
+        ;(data || []).forEach((site: any) => {
+          const key = `${site.client_id || ''}|${normalizedKey(site.name || '')}|${normalizedKey(site.address || '')}`
+          jobsiteIdByKey.set(key, site.id)
+        })
       }
 
-      for (const row of equipment) {
-        const latest = [...rows].reverse().find(item => item.binNumber === row.binNumber) || row
-        const clientId = clientIdByName.get(latest.accountName.toLowerCase()) || null
-        const jobsiteId = jobsiteIdByKey.get(`${latest.accountName}|${latest.projectName}|${latest.address}`.toLowerCase()) || null
+      const equipmentIdByBin = new Map<string, string>()
+      existingEquipment.forEach(item => {
+        if (item.bin_number) equipmentIdByBin.set(normalizedKey(item.bin_number), item.id)
+        if (item.container_number) equipmentIdByBin.set(normalizedKey(item.container_number), item.id)
+      })
+
+      const equipmentToInsert: any[] = []
+      const equipmentToUpdate: { id: string; payload: any; binNumber: string }[] = []
+      const reversedRows = [...rows].reverse()
+      equipment.forEach(row => {
+        const latest = reversedRows.find(item => item.binNumber === row.binNumber) || row
+        const clientId = clientIdByName.get(normalizedKey(latest.accountName)) || null
+        const jobsiteKey = `${clientId || ''}|${normalizedKey(latest.projectName)}|${normalizedKey(latest.address)}`
+        const jobsiteId = jobsiteIdByKey.get(jobsiteKey) || null
         const payload = {
           container_number: latest.binNumber,
           bin_number: latest.binNumber,
@@ -366,47 +392,44 @@ export default function BulkImportPage() {
           last_serviced_at: new Date().toISOString(),
           last_service_date: new Date().toISOString().slice(0, 10),
         }
-        const { data: existing } = await supabase
-          .from('equipment')
-          .select('id')
-          .or(`container_number.eq.${latest.binNumber},bin_number.eq.${latest.binNumber}`)
-          .limit(1)
-        const wasExisting = Boolean(existing?.[0]?.id)
-        const { error: err } = wasExisting
-          ? await supabase.from('equipment').update(payload).eq('id', existing[0].id)
-          : await supabase.from('equipment').insert(payload)
-        if (err) notes.push(`Bin ${latest.binNumber}: ${err.message}`)
-        else if (wasExisting) nextStats.equipmentUpdated++
-        else nextStats.equipmentCreated++
+        const existingId = equipmentIdByBin.get(normalizedKey(latest.binNumber))
+        if (existingId) equipmentToUpdate.push({ id: existingId, payload, binNumber: latest.binNumber })
+        else equipmentToInsert.push(payload)
+      })
+
+      for (const batch of chunks(equipmentToInsert)) {
+        const { error: err } = await supabase.from('equipment').insert(batch)
+        if (err) notes.push(`Equipment batch: ${err.message}`)
+        else nextStats.equipmentCreated += batch.length
       }
 
-      for (const row of serviceRows) {
-        let existingQuery = supabase
-          .from('service_requests')
-          .select('id')
-          .eq('bin_number', row.binNumber)
-          .eq('jobsite_address', row.address)
-        if (row.reportDate) existingQuery = existingQuery.eq('preferred_date', row.reportDate)
-        const { data: existingExact } = await existingQuery.limit(1)
-        const { data: existingByProject } = existingExact?.[0]?.id
-          ? { data: existingExact }
-          : row.reportDate
-            ? { data: [] }
-          : await supabase
-            .from('service_requests')
-            .select('id')
-            .eq('bin_number', row.binNumber)
-            .ilike('notes', `%${row.projectName}%`)
-            .limit(1)
+      for (const item of equipmentToUpdate) {
+        const { error: err } = await supabase.from('equipment').update(item.payload).eq('id', item.id)
+        if (err) notes.push(`Bin ${item.binNumber}: ${err.message}`)
+        else nextStats.equipmentUpdated++
+      }
 
-        if (existingByProject?.[0]?.id) {
+      const serviceKeys = new Set<string>()
+      existingServices.forEach(service => {
+        serviceKeys.add(`${normalizedKey(service.bin_number || '')}|${normalizedKey(service.jobsite_address || '')}|${service.preferred_date || ''}`)
+        const project = String(service.notes || '').split('\n')[0] || ''
+        if (project) serviceKeys.add(`${normalizedKey(service.bin_number || '')}|${normalizedKey(project)}|`)
+      })
+
+      const servicesToInsert = serviceRows.flatMap(row => {
+        const datedKey = `${normalizedKey(row.binNumber)}|${normalizedKey(row.address)}|${row.reportDate || ''}`
+        const projectKey = `${normalizedKey(row.binNumber)}|${normalizedKey(`${row.accountName} - ${row.projectName}`)}|`
+        if (serviceKeys.has(datedKey) || (!row.reportDate && serviceKeys.has(projectKey))) {
           nextStats.servicesSkipped++
-          continue
+          return []
         }
-
-        const { error: err } = await supabase.from('service_requests').insert({
-          client_id: clientIdByName.get(row.accountName.toLowerCase()) || null,
-          jobsite_id: jobsiteIdByKey.get(`${row.accountName}|${row.projectName}|${row.address}`.toLowerCase()) || null,
+        serviceKeys.add(datedKey)
+        serviceKeys.add(projectKey)
+        const clientId = clientIdByName.get(normalizedKey(row.accountName)) || null
+        const jobsiteId = jobsiteIdByKey.get(`${clientId || ''}|${normalizedKey(row.projectName)}|${normalizedKey(row.address)}`) || null
+        return [{
+          client_id: clientId,
+          jobsite_id: jobsiteId,
           status: serviceStatus(row.operation),
           service_type: serviceType(row.operation),
           jobsite_address: row.address,
@@ -416,9 +439,13 @@ export default function BulkImportPage() {
           bin_number: row.binNumber,
           priority: row.operation === 'water_removal' ? 'high' : 'normal',
           notes: `${row.accountName} - ${row.projectName}\nBin #${row.binNumber}\nType: ${row.binType}\nSource: ${fileName || 'bulk import'} sheet ${row.sheet}${row.comments ? `\n${row.comments}` : ''}`,
-        })
-        if (err) notes.push(`Service ${row.binNumber}: ${err.message}`)
-        else nextStats.servicesCreated++
+        }]
+      })
+
+      for (const batch of chunks(servicesToInsert)) {
+        const { error: err } = await supabase.from('service_requests').insert(batch)
+        if (err) notes.push(`Service batch: ${err.message}`)
+        else nextStats.servicesCreated += batch.length
       }
 
       const dailyRows = rows.filter(row => row.reportDate).map(row => ({
@@ -439,8 +466,10 @@ export default function BulkImportPage() {
         if (dailyDates.length > 0) {
           await supabase.from('daily_operation_events').delete().eq('source_file', sourceFile).in('event_date', dailyDates)
         }
-        const { error: dailyError } = await supabase.from('daily_operation_events').insert(dailyRows)
-        if (dailyError) notes.push(`Daily report trace: ${dailyError.message}`)
+        for (const batch of chunks(dailyRows)) {
+          const { error: dailyError } = await supabase.from('daily_operation_events').insert(batch)
+          if (dailyError) notes.push(`Daily report trace: ${dailyError.message}`)
+        }
       }
 
       setReport(notes)

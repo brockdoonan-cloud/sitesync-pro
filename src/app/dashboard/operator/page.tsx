@@ -3,17 +3,17 @@ import { createClient } from '@/lib/supabase/server'
 
 export default async function OperatorDashboard() {
   const supabase = createClient()
-  const [jobs, equipment, leads, clients] = await Promise.all([
+  const [jobs, deployed, available, leads, clients] = await Promise.all([
     supabase.from('jobs').select('id', { count: 'exact', head: true }),
-    supabase.from('equipment').select('id,status'),
+    supabase.from('equipment').select('id', { count: 'exact', head: true }).eq('status', 'deployed'),
+    supabase.from('equipment').select('id', { count: 'exact', head: true }).eq('status', 'available'),
     supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('clients').select('id', { count: 'exact', head: true }),
   ])
-  const equipmentRows = equipment.data || []
   const stats = {
     jobs: jobs.count || 0,
-    deployed: equipmentRows.filter((item: any) => item.status === 'deployed').length,
-    available: equipmentRows.filter((item: any) => item.status === 'available').length,
+    deployed: deployed.count || 0,
+    available: available.count || 0,
     leads: leads.count || 0,
     clients: clients.count || 0,
   }

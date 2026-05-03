@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type ServiceCode } from '@/lib/pricing'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 type InvoiceRow = {
   id: string
@@ -474,14 +475,18 @@ export default function BillingPage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [{ data: invoiceRows, error: invoiceError }, { data: serviceRows, error: serviceError }] = await Promise.all([
-      supabase.from('invoices').select('*').order('created_at', { ascending: false }).limit(1000),
-      supabase.from('service_requests').select('*').order('created_at', { ascending: false }).limit(1000),
-    ])
-    if (invoiceError) setError(invoiceError.message)
-    else if (serviceError) setError(serviceError.message)
-    setInvoices((invoiceRows || []) as InvoiceRow[])
-    setServices((serviceRows || []) as ServiceRow[])
+    try {
+      const [invoiceRows, serviceRows] = await Promise.all([
+        fetchAllRows<InvoiceRow>((from, to) => supabase.from('invoices').select('*').order('created_at', { ascending: false }).range(from, to)),
+        fetchAllRows<ServiceRow>((from, to) => supabase.from('service_requests').select('*').order('created_at', { ascending: false }).range(from, to)),
+      ])
+      setInvoices(invoiceRows)
+      setServices(serviceRows)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load billing records.')
+      setInvoices([])
+      setServices([])
+    }
     setLoading(false)
   }, [supabase])
 

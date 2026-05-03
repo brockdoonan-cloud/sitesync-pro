@@ -1,13 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import UpdateRequestStatus from '@/components/UpdateRequestStatus'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 export default async function OperatorRequestsPage() {
   const supabase = createClient()
 
-  const { data: requests } = await supabase
-    .from('service_requests')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const requests = await fetchAllRows<any>((from, to) =>
+    supabase
+      .from('service_requests')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, to)
+  )
 
   return (
     <div className="space-y-6">
@@ -16,7 +20,7 @@ export default async function OperatorRequestsPage() {
         <p className="text-slate-400 mt-1">Review and manage all incoming service requests</p>
       </div>
       <div className="space-y-3">
-        {requests && requests.length > 0 ? requests.map((req: any) => (
+        {requests.length > 0 ? requests.map((req: any) => (
           <div key={req.id} className="card">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div className="flex-1">
