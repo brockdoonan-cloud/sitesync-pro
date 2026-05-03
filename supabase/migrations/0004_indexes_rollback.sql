@@ -1,0 +1,35 @@
+begin;
+
+drop index if exists public.truck_locations_truck_recorded_idx;
+drop index if exists public.operator_profiles_org_user_idx;
+drop index if exists public.pricing_profiles_org_created_idx;
+drop index if exists public.daily_operation_events_org_bin_idx;
+drop index if exists public.daily_operation_events_org_date_idx;
+drop index if exists public.daily_operation_events_source_date_idx;
+drop index if exists public.billing_events_org_service_idx;
+drop index if exists public.billing_events_org_invoice_idx;
+drop index if exists public.invoices_invoice_number_idx;
+drop index if exists public.invoices_org_invoice_date_idx;
+drop index if exists public.sms_logs_request_created_idx;
+drop index if exists public.service_requests_preferred_date_idx;
+drop index if exists public.service_requests_org_created_idx;
+drop index if exists public.service_requests_customer_status_created_idx;
+drop index if exists public.service_requests_customer_created_idx;
+drop index if exists public.quote_responses_org_status_idx;
+drop index if exists public.quote_responses_operator_idx;
+drop index if exists public.quote_responses_request_price_idx;
+drop index if exists public.quote_responses_request_created_idx;
+drop index if exists public.quote_requests_access_token_created_idx;
+drop index if exists public.quote_requests_access_token_idx;
+drop index if exists public.jobsites_org_name_idx;
+drop index if exists public.jobsites_org_address_idx;
+drop index if exists public.jobs_org_service_request_idx;
+drop index if exists public.jobs_org_status_idx;
+drop index if exists public.jobs_org_scheduled_idx;
+drop index if exists public.clients_org_status_idx;
+drop index if exists public.clients_org_created_idx;
+drop index if exists public.organization_members_org_role_idx;
+drop index if exists public.organization_members_user_role_idx;
+drop index if exists public.profiles_role_idx;
+
+commit;

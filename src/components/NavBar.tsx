@@ -36,6 +36,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   ]
   const custLinks = [
     { href: '/dashboard/customer', label: t('overview') },
+    { href: '/dashboard/customer/bins', label: t('equipment') },
     { href: '/dashboard/customer/request', label: t('requestService') },
     { href: '/dashboard/customer/tracking', label: t('track') },
     { href: '/dashboard/customer/billing', label: t('billing') },

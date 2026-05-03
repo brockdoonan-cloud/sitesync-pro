@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { logAuditEvent } from '@/lib/audit/log'
+import { captureAppException } from '@/lib/monitoring/sentry'
 
 type SmsType = 'confirmation' | 'eta_update' | 'completed' | 'scheduled'
 
@@ -62,8 +64,18 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    await logAuditEvent({
+      userId: user.id,
+      action: 'send_sms',
+      resourceType: 'sms',
+      resourceId: requestId || null,
+      afterState: { type, phone, success: result.success },
+      request: req,
+    })
+
     return NextResponse.json(result)
   } catch (err) {
+    captureAppException(err, { route: '/api/sms' })
     const message = err instanceof Error ? err.message : 'Unknown SMS error'
     return NextResponse.json({ error: message }, { status: 500 })
   }

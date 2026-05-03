@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { paginate, showingRange, totalPages } from '@/lib/pagination'
 
 type Lead = {
   id: string; name: string; email: string; phone?: string;
@@ -26,16 +28,40 @@ export default function LeadsPage() {
   const [sending, setSending] = useState(false)
   const [smsResult, setSmsResult] = useState('')
   const [note, setNote] = useState('')
+  const [total, setTotal] = useState(0)
+  const [statusCounts, setStatusCounts] = useState({ open: 0, contacted: 0, quoted: 0, won: 0 })
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
+  const pagination = useMemo(() => paginate({ page: searchParams.get('page') }), [searchParams])
+  const range = showingRange(total, pagination)
+  const pages = totalPages(total, pagination.pageSize)
 
   const load = useCallback(async () => {
     setLoading(true)
-    let q = supabase.from('quote_requests').select('*').order('created_at',{ascending:false})
+    let q = supabase
+      .from('quote_requests')
+      .select('*', { count: 'exact' })
+      .order('created_at',{ascending:false})
+      .range(pagination.from, pagination.to)
     if (filter !== 'all') q = q.eq('status', filter)
-    const { data } = await q
-    setLeads(data || [])
+    const [leadResult, open, contacted, quoted, won] = await Promise.all([
+      q,
+      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'contacted'),
+      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'quoted'),
+      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'won'),
+    ])
+    setLeads(leadResult.data || [])
+    setTotal(leadResult.count || 0)
+    setStatusCounts({
+      open: open.count || 0,
+      contacted: contacted.count || 0,
+      quoted: quoted.count || 0,
+      won: won.count || 0,
+    })
     setLoading(false)
-  }, [filter, supabase])
+  }, [filter, pagination.from, pagination.to, supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -85,10 +111,10 @@ export default function LeadsPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          {l:'New Leads', v:leads.filter(l=>l.status==='open').length, c:'text-sky-400', bg:'bg-sky-500/10 border-sky-500/20'},
-          {l:'Contacted', v:leads.filter(l=>l.status==='contacted').length, c:'text-yellow-400', bg:'bg-yellow-500/10 border-yellow-500/20'},
-          {l:'Quoted',    v:leads.filter(l=>l.status==='quoted').length, c:'text-purple-400', bg:'bg-purple-500/10 border-purple-500/20'},
-          {l:'Won',       v:leads.filter(l=>l.status==='won').length, c:'text-green-400', bg:'bg-green-500/10 border-green-500/20'},
+          {l:'New Leads', v:statusCounts.open, c:'text-sky-400', bg:'bg-sky-500/10 border-sky-500/20'},
+          {l:'Contacted', v:statusCounts.contacted, c:'text-yellow-400', bg:'bg-yellow-500/10 border-yellow-500/20'},
+          {l:'Quoted',    v:statusCounts.quoted, c:'text-purple-400', bg:'bg-purple-500/10 border-purple-500/20'},
+          {l:'Won',       v:statusCounts.won, c:'text-green-400', bg:'bg-green-500/10 border-green-500/20'},
         ].map(s => (
           <div key={s.l} className={`rounded-xl border px-4 py-3 ${s.bg}`}>
             <div className={`text-2xl font-bold ${s.c}`}>{s.v}</div>
@@ -99,7 +125,7 @@ export default function LeadsPage() {
 
       <div className="flex gap-2 flex-wrap">
         {['open','contacted','quoted','won','lost','all'].map(f => (
-          <button key={f} onClick={() => setFilter(f)}
+          <button key={f} onClick={() => { setFilter(f); router.push('/dashboard/operator/leads?page=1') }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${filter===f ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-slate-400 border border-slate-700/50 hover:text-white'}`}>
             {f==='all' ? 'All Leads' : SC[f]?.label || f}
           </button>
@@ -149,6 +175,29 @@ export default function LeadsPage() {
           })}
         </div>
       )}
+
+      <div className="card p-0 overflow-hidden">
+        <div className="flex flex-col gap-3 border-slate-700/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-slate-500">Showing {range.start}-{range.end} of {total}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/dashboard/operator/leads?page=${Math.max(1, pagination.page - 1)}`)}
+              disabled={pagination.page <= 1}
+              className="rounded-lg border border-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:pointer-events-none disabled:border-slate-700/40 disabled:text-slate-600"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-slate-500">Page {pagination.page} of {pages}</span>
+            <button
+              onClick={() => router.push(`/dashboard/operator/leads?page=${Math.min(pages, pagination.page + 1)}`)}
+              disabled={pagination.page >= pages}
+              className="rounded-lg border border-slate-700/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-slate-500 hover:text-white disabled:pointer-events-none disabled:border-slate-700/40 disabled:text-slate-600"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
 
       {selected && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-end p-4"

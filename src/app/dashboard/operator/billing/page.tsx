@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type ServiceCode } from '@/lib/pricing'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import { validateWorkbookFile } from '@/lib/files/workbook'
 
 type InvoiceRow = {
   id: string
@@ -555,6 +556,7 @@ export default function BillingPage() {
     setError('')
     setMessage('')
     try {
+      validateWorkbookFile(file)
       const parsed = await parseBillingWorkbook(file)
       setBatch(parsed)
       if (parsed.lines[0]?.date) setSelectedDate(parsed.lines[0].date)

@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import PaginationControls from '@/components/PaginationControls'
+import { paginate } from '@/lib/pagination'
 
 type JobRow = {
   id: string
@@ -133,12 +135,14 @@ function JobCard({ job }: { job: JobRow }) {
   )
 }
 
-export default async function OperatorJobsPage() {
+export default async function OperatorJobsPage({ searchParams }: { searchParams?: { page?: string } }) {
   const supabase = createClient()
-  const { data: jobs } = await supabase
+  const pagination = paginate({ page: searchParams?.page })
+  const { data: jobs, count } = await supabase
     .from('jobs')
-    .select('*,service_requests(service_type,jobsite_address,profiles(full_name,company_name))')
+    .select('*,service_requests(service_type,jobsite_address,profiles(full_name,company_name))', { count: 'exact' })
     .order('scheduled_date', { ascending: true })
+    .range(pagination.from, pagination.to)
 
   const today = new Date().toISOString().split('T')[0]
   const liveJobs = (jobs || []) as JobRow[]
@@ -174,6 +178,12 @@ export default async function OperatorJobsPage() {
           <div className="card text-center py-8"><p className="text-slate-400">No upcoming jobs.</p></div>
         )}
       </div>
+
+      {liveJobs.length > 0 && (
+        <div className="card p-0 overflow-hidden">
+          <PaginationControls basePath="/dashboard/operator/jobs" pagination={pagination} total={count || 0} />
+        </div>
+      )}
     </div>
   )
 }

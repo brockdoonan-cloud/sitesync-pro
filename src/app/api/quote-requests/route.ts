@@ -2,10 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyQuoteReceived } from '@/lib/notifications'
+import { logAuditEvent } from '@/lib/audit/log'
+import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
+import { getClientIp } from '@/lib/request'
+import { captureAppException } from '@/lib/monitoring/sentry'
 
 const requiredFields = ['name', 'email', 'city', 'zip', 'equipment_type', 'job_type']
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rate = await checkRateLimit({
+    key: `quote-submit:${ip}`,
+    limit: 5,
+    windowSeconds: 60 * 60,
+    route: '/api/quote-requests',
+  })
+  if (!rate.allowed) {
+    const limited = tooManyRequests(rate.resetAt)
+    return NextResponse.json(limited.body, limited.init)
+  }
+
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
 
@@ -46,10 +62,18 @@ export async function POST(request: NextRequest) {
     : await query.then((value: any) => ({ ...value, data: { ...payload, id: null, created_at: new Date().toISOString() } }))
 
   if (result.error) {
+    captureAppException(result.error, { route: '/api/quote-requests' })
     return NextResponse.json({ error: result.error.message }, { status: 500 })
   }
 
   await notifyQuoteReceived(result.data)
+  await logAuditEvent({
+    action: 'create',
+    resourceType: 'quote_request',
+    resourceId: result.data?.id,
+    afterState: result.data,
+    request,
+  })
 
   return NextResponse.json({ request: result.data })
 }

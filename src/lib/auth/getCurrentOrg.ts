@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { isOperatorUser } from '@/lib/operator'
+import { setSentryUserContext } from '@/lib/monitoring/sentry'
 
 export type OrgRole = 'super_admin' | 'operator_admin' | 'operator_member' | 'client'
 
@@ -38,7 +39,7 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
     const role = chosen.role as OrgRole
     const organization = Array.isArray(chosen.organizations) ? chosen.organizations[0] : chosen.organizations
 
-    return {
+    const currentOrg = {
       user,
       organizationId: chosen.organization_id,
       organizationName: organization?.name || null,
@@ -47,6 +48,8 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
       isOperator: ['super_admin', 'operator_admin', 'operator_member'].includes(role),
       isClient: role === 'client',
     }
+    setSentryUserContext({ userId: user.id, organizationId: currentOrg.organizationId, role: currentOrg.role })
+    return currentOrg
   }
 
   const { data: profile } = await supabase
@@ -57,7 +60,7 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
 
   const fallbackOperator = isOperatorUser(profile, user.email)
 
-  return {
+  const fallbackOrg: CurrentOrg = {
     user,
     organizationId: null,
     organizationName: profile?.company_name || null,
@@ -66,4 +69,6 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
     isOperator: fallbackOperator,
     isClient: !fallbackOperator,
   }
+  setSentryUserContext({ userId: user.id, organizationId: fallbackOrg.organizationId, role: fallbackOrg.role })
+  return fallbackOrg
 }

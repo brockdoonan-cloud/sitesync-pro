@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import { validateWorkbookFile } from '@/lib/files/workbook'
 
 type ImportRow = {
   id: string
@@ -275,6 +276,7 @@ export default function BulkImportPage() {
     setStats(null)
     setFileName(file.name)
     try {
+      validateWorkbookFile(file)
       const parsed = await parseWorkbook(file)
       if (parsed.length === 0) throw new Error('No importable bin rows were found.')
       setRows(parsed)

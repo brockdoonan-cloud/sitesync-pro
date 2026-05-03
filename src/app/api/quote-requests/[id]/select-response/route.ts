@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifySelectedOperator } from '@/lib/notifications'
+import { logAuditEvent } from '@/lib/audit/log'
+import { isQuoteTokenExpired } from '@/lib/quotes/token'
+import { captureAppException } from '@/lib/monitoring/sentry'
 
 type Params = { params: { id: string } }
 
@@ -24,6 +27,10 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   if (quoteError || !quoteRequest) {
     return NextResponse.json({ error: 'This quote link is invalid or expired.' }, { status: 404 })
+  }
+
+  if (isQuoteTokenExpired(quoteRequest.created_at)) {
+    return NextResponse.json({ error: 'This quote link has expired. Please submit a new request.' }, { status: 410 })
   }
 
   const { data: selected, error: selectedError } = await admin
@@ -52,10 +59,22 @@ export async function POST(request: NextRequest, { params }: Params) {
     .select('*')
     .single()
 
-  if (selectError) return NextResponse.json({ error: selectError.message }, { status: 500 })
+  if (selectError) {
+    captureAppException(selectError, { route: '/api/quote-requests/[id]/select-response' })
+    return NextResponse.json({ error: selectError.message }, { status: 500 })
+  }
 
   await admin.from('quote_requests').update({ status: 'won' }).eq('id', params.id)
   await notifySelectedOperator(quoteRequest, updatedSelected, admin)
+  await logAuditEvent({
+    action: 'select_quote',
+    resourceType: 'quote_response',
+    resourceId: updatedSelected.id,
+    orgId: updatedSelected.organization_id,
+    beforeState: selected,
+    afterState: updatedSelected,
+    request,
+  })
 
   return NextResponse.json({ success: true, response: updatedSelected })
 }
