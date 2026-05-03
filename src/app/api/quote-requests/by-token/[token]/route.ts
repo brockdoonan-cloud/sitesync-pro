@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 import { getClientIp } from '@/lib/request'
 import { isQuoteTokenExpired } from '@/lib/quotes/token'
 import { captureAppException } from '@/lib/monitoring/sentry'
 
 type Params = { params: { token: string } }
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const ip = getClientIp(_request)
@@ -20,9 +22,29 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return NextResponse.json(limited.body, limited.init)
   }
 
+  if (!uuidPattern.test(params.token)) {
+    return NextResponse.json({ error: 'This quote link is invalid or expired.' }, { status: 404 })
+  }
+
   const admin = createAdminClient()
   if (!admin) {
-    return NextResponse.json({ error: 'Server quote access is not configured.' }, { status: 503 })
+    const supabase = createClient()
+    const { data, error } = await supabase.rpc('get_quote_marketplace_by_token', { p_token: params.token })
+
+    if (error) {
+      captureAppException(error, { route: '/api/quote-requests/by-token/[token]' })
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: 'This quote link is invalid or expired.' }, { status: 404 })
+    }
+
+    if (data.expired) {
+      return NextResponse.json({ error: 'This quote link has expired. Please submit a new request.' }, { status: 410 })
+    }
+
+    return NextResponse.json(data)
   }
 
   const { data: quoteRequest, error } = await admin

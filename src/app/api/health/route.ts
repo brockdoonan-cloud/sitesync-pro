@@ -25,9 +25,16 @@ export async function GET() {
     supabase.auth.getUser(),
   ])
 
+  const authSessionMissing = auth.error
+    && (
+      auth.error.name === 'AuthSessionMissingError'
+      || auth.error.message.toLowerCase().includes('auth session missing')
+      || auth.error.message.toLowerCase().includes('session_missing')
+    )
+
   const checks = {
     database: database.error ? 'fail' : 'ok',
-    auth: auth.error ? 'fail' : 'ok',
+    auth: auth.error && !authSessionMissing ? 'fail' : 'ok',
   } as const
   const status = checks.database === 'ok' && checks.auth === 'ok' ? 'ok' : checks.database === 'ok' ? 'degraded' : 'down'
 

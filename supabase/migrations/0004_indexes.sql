@@ -72,11 +72,14 @@ create index if not exists invoices_org_invoice_date_idx
 create index if not exists invoices_invoice_number_idx
   on public.invoices (invoice_number);
 
-create index if not exists billing_events_org_invoice_idx
-  on public.billing_events (organization_id, invoice_id);
+create index if not exists billing_events_org_invoice_number_idx
+  on public.billing_events (organization_id, invoice_number);
 
-create index if not exists billing_events_org_service_idx
-  on public.billing_events (organization_id, service_request_id);
+create index if not exists billing_events_org_bin_idx
+  on public.billing_events (organization_id, bin_number);
+
+create index if not exists billing_events_org_event_date_idx
+  on public.billing_events (organization_id, event_date desc);
 
 create index if not exists daily_operation_events_source_date_idx
   on public.daily_operation_events (source_file, event_date);
