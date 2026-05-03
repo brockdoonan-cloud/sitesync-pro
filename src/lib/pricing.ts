@@ -12,6 +12,7 @@ export type PriceInput = {
   serviceCode: ServiceCode
   quantity?: number
   miles?: number
+  mileageBands?: MileageBand[]
   sameDay?: boolean
   trashFee?: boolean
   overloadFee?: boolean
@@ -27,10 +28,22 @@ export type PriceLine = {
   taxable?: boolean
 }
 
+export type MileageBand = {
+  label: string
+  minMiles: number
+  maxMiles: number | null
+  rate: number
+}
+
 export const DEFAULT_PRICING = {
   yardAddress: '255 S Orange Ave, Orlando, FL 32801',
   includedMiles: 30,
   extraMileRate: 4.5,
+  mileageBands: [
+    { label: '0-30 miles included', minMiles: 0, maxMiles: 30, rate: 0 },
+    { label: '31-50 miles', minMiles: 31, maxMiles: 50, rate: 4.5 },
+    { label: '51+ miles', minMiles: 51, maxMiles: null, rate: 6.5 },
+  ] as MileageBand[],
   oneBinService: 395,
   twoBinService: 350,
   waterPumpout: 395,
@@ -81,6 +94,9 @@ export function calculatePrice(input: PriceInput) {
   const miles = Math.max(0, input.miles || 0)
   const lines: PriceLine[] = []
   const baseRate = serviceBaseRate(input)
+  const mileageBands = (input.mileageBands?.length ? input.mileageBands : DEFAULT_PRICING.mileageBands)
+    .filter(band => Number.isFinite(band.minMiles) && (band.maxMiles === null || Number.isFinite(band.maxMiles)) && Number.isFinite(band.rate))
+    .sort((a, b) => a.minMiles - b.minMiles)
 
   lines.push({
     label: `${serviceLabel(input.serviceCode)}${miles <= DEFAULT_PRICING.includedMiles ? ' within 30 miles' : ''}`,
@@ -89,15 +105,18 @@ export function calculatePrice(input: PriceInput) {
     amount: baseRate * quantity,
   })
 
-  if (miles > DEFAULT_PRICING.includedMiles) {
-    const extraMiles = Number((miles - DEFAULT_PRICING.includedMiles).toFixed(1))
+  mileageBands.forEach(band => {
+    if (band.rate <= 0 || miles < band.minMiles) return
+    const bandMax = band.maxMiles ?? miles
+    const billableMiles = Number((Math.min(miles, bandMax) - band.minMiles + 1).toFixed(1))
+    if (billableMiles <= 0) return
     lines.push({
-      label: `Mileage over ${DEFAULT_PRICING.includedMiles} miles`,
-      quantity: extraMiles,
-      rate: DEFAULT_PRICING.extraMileRate,
-      amount: extraMiles * DEFAULT_PRICING.extraMileRate,
+      label: `Mileage ${band.label}`,
+      quantity: billableMiles,
+      rate: band.rate,
+      amount: Number((billableMiles * band.rate).toFixed(2)),
     })
-  }
+  })
 
   if (input.sameDay) lines.push({ label: 'Same day/night/weekend service', quantity, rate: DEFAULT_PRICING.sameDayFee, amount: DEFAULT_PRICING.sameDayFee * quantity })
   if (input.trashFee) lines.push({ label: 'Trash or unauthorized material fee', quantity, rate: DEFAULT_PRICING.trashFee, amount: DEFAULT_PRICING.trashFee * quantity })

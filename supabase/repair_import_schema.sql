@@ -141,6 +141,7 @@ create table if not exists public.pricing_profiles (
   yard_address text,
   included_miles numeric default 30,
   extra_mile_rate numeric default 4.5,
+  mileage_bands jsonb default '[{"label":"0-30 miles included","minMiles":0,"maxMiles":30,"rate":0},{"label":"31-50 miles","minMiles":31,"maxMiles":50,"rate":4.5},{"label":"51+ miles","minMiles":51,"maxMiles":null,"rate":6.5}]'::jsonb,
   one_bin_service numeric default 395,
   two_bin_service numeric default 350,
   water_pumpout numeric default 395,
@@ -154,6 +155,9 @@ create table if not exists public.pricing_profiles (
   active boolean default true,
   created_at timestamptz default now()
 );
+
+alter table public.pricing_profiles
+  add column if not exists mileage_bands jsonb default '[{"label":"0-30 miles included","minMiles":0,"maxMiles":30,"rate":0},{"label":"31-50 miles","minMiles":31,"maxMiles":50,"rate":4.5},{"label":"51+ miles","minMiles":51,"maxMiles":null,"rate":6.5}]'::jsonb;
 
 create table if not exists public.truck_locations (
   id uuid default gen_random_uuid() primary key,

@@ -2,12 +2,18 @@
 
 import { useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { DEFAULT_PRICING, calculatePrice, money, serviceLabel, type ServiceCode } from '@/lib/pricing'
+import { DEFAULT_PRICING, calculatePrice, money, serviceLabel, type MileageBand, type ServiceCode } from '@/lib/pricing'
 
 const serviceOptions: ServiceCode[] = ['delivery', 'swap', 'pickup', 'water_removal', 'relocate', 'onsite_relocate', 'dead_run']
 
 export default function PricingPage() {
   const supabase = useMemo(() => createClient(), [])
+  const [mileageBands, setMileageBands] = useState(DEFAULT_PRICING.mileageBands.map(band => ({
+    label: band.label,
+    minMiles: String(band.minMiles),
+    maxMiles: band.maxMiles === null ? '' : String(band.maxMiles),
+    rate: String(band.rate),
+  })))
   const [profile, setProfile] = useState({
     name: 'Orlando standard pricing',
     included_miles: String(DEFAULT_PRICING.includedMiles),
@@ -21,10 +27,23 @@ export default function PricingPage() {
   const [calc, setCalc] = useState({ serviceCode: 'swap' as ServiceCode, quantity: '1', miles: '24', sameDay: false, trashFee: false, overloadFee: false, standbyMinutes: '0' })
   const [message, setMessage] = useState('')
 
+  const parsedMileageBands = useMemo<MileageBand[]>(() => (
+    mileageBands
+      .map(band => ({
+        label: band.label.trim() || `${band.minMiles || 0}-${band.maxMiles || '+'} miles`,
+        minMiles: Number(band.minMiles || 0),
+        maxMiles: band.maxMiles.trim() ? Number(band.maxMiles) : null,
+        rate: Number(band.rate || 0),
+      }))
+      .filter(band => Number.isFinite(band.minMiles) && (band.maxMiles === null || Number.isFinite(band.maxMiles)) && Number.isFinite(band.rate))
+      .sort((a, b) => a.minMiles - b.minMiles)
+  ), [mileageBands])
+
   const price = calculatePrice({
     serviceCode: calc.serviceCode,
     quantity: Number(calc.quantity || 1),
     miles: Number(calc.miles || 0),
+    mileageBands: parsedMileageBands,
     sameDay: calc.sameDay,
     trashFee: calc.trashFee,
     overloadFee: calc.overloadFee,
@@ -33,11 +52,22 @@ export default function PricingPage() {
 
   const saveProfile = async () => {
     setMessage('')
+    const orderedBands = parsedMileageBands
+    if (!orderedBands.length) {
+      setMessage('Add at least one mileage band before saving.')
+      return
+    }
+    const invalidBand = orderedBands.find((band, index) => band.maxMiles !== null && band.maxMiles < band.minMiles || index > 0 && band.minMiles <= orderedBands[index - 1].minMiles)
+    if (invalidBand) {
+      setMessage('Mileage bands must be in order and each end mile must be greater than its start mile.')
+      return
+    }
     const payload = {
       name: profile.name,
       yard_address: DEFAULT_PRICING.yardAddress,
       included_miles: Number(profile.included_miles),
       extra_mile_rate: Number(profile.extra_mile_rate),
+      mileage_bands: orderedBands,
       one_bin_service: Number(profile.one_bin_service),
       two_bin_service: Number(profile.two_bin_service),
       fuel_surcharge_percent: Number(profile.fuel_surcharge_percent),
@@ -47,6 +77,23 @@ export default function PricingPage() {
     }
     const { error } = await supabase.from('pricing_profiles').insert(payload)
     setMessage(error ? error.message : 'Pricing profile saved for onboarding.')
+  }
+
+  const updateMileageBand = (index: number, key: keyof typeof mileageBands[number], value: string) => {
+    setMileageBands(prev => prev.map((band, bandIndex) => bandIndex === index ? { ...band, [key]: value } : band))
+  }
+
+  const addMileageBand = () => {
+    setMileageBands(prev => {
+      const last = prev[prev.length - 1]
+      const lastMax = Number(last?.maxMiles || last?.minMiles || 50)
+      const start = Number.isFinite(lastMax) ? lastMax + 1 : 51
+      return [...prev, { label: `${start}+ miles`, minMiles: String(start), maxMiles: '', rate: String(DEFAULT_PRICING.extraMileRate) }]
+    })
+  }
+
+  const removeMileageBand = (index: number) => {
+    setMileageBands(prev => prev.filter((_, bandIndex) => bandIndex !== index))
   }
 
   return (
@@ -80,6 +127,26 @@ export default function PricingPage() {
                 <input className="input" value={profile[key as keyof typeof profile]} onChange={event => setProfile(prev => ({ ...prev, [key]: event.target.value }))} />
               </label>
             ))}
+          </div>
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Mileage bands</h3>
+                <p className="text-xs text-slate-500">Set as many tiers as needed, such as 0-30, 31-50, and 51+.</p>
+              </div>
+              <button type="button" onClick={addMileageBand} className="btn-secondary px-3 py-1.5 text-xs">Add Band</button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {mileageBands.map((band, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2">
+                  <input className="input col-span-12 sm:col-span-4" value={band.label} onChange={event => updateMileageBand(index, 'label', event.target.value)} placeholder="31-50 miles" />
+                  <input className="input col-span-4 sm:col-span-2" type="number" min="0" value={band.minMiles} onChange={event => updateMileageBand(index, 'minMiles', event.target.value)} placeholder="From" />
+                  <input className="input col-span-4 sm:col-span-2" type="number" min="0" value={band.maxMiles} onChange={event => updateMileageBand(index, 'maxMiles', event.target.value)} placeholder="To" />
+                  <input className="input col-span-4 sm:col-span-2" type="number" min="0" step="0.01" value={band.rate} onChange={event => updateMileageBand(index, 'rate', event.target.value)} placeholder="Rate" />
+                  <button type="button" onClick={() => removeMileageBand(index)} className="col-span-12 sm:col-span-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 hover:bg-red-500/20">Remove</button>
+                </div>
+              ))}
+            </div>
           </div>
           <button onClick={saveProfile} className="btn-primary px-4 py-2">Save Pricing Profile</button>
         </section>
