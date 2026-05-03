@@ -77,55 +77,6 @@ as $$
     );
 $$;
 
-create or replace function public.current_user_is_client_for_client(target_org uuid, target_client uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select target_org is not null
-    and target_client is not null
-    and exists (
-      select 1
-      from public.organization_members om
-      where om.user_id = auth.uid()
-        and om.organization_id = target_org
-        and om.role = 'client'
-    )
-    and exists (
-      select 1
-      from public.clients c
-      where c.id = target_client
-        and c.organization_id = target_org
-        and lower(coalesce(auth.jwt() ->> 'email', '')) in (
-          lower(coalesce(c.email, '')),
-          lower(coalesce(c.billing_email, ''))
-        )
-    );
-$$;
-
-create or replace function public.current_user_is_client_for_customer(target_org uuid, target_client uuid, target_customer uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select (
-    target_customer is not null
-    and target_customer = auth.uid()
-    and exists (
-      select 1
-      from public.organization_members om
-      where om.user_id = auth.uid()
-        and om.organization_id = target_org
-        and om.role = 'client'
-    )
-  )
-  or public.current_user_is_client_for_client(target_org, target_client);
-$$;
-
 do $$
 declare
   atlantic_id uuid;
@@ -200,6 +151,55 @@ begin
 
   execute 'alter table public.quote_requests alter column organization_id set default ''' || atlantic_id || '''::uuid';
 end $$;
+
+create or replace function public.current_user_is_client_for_client(target_org uuid, target_client uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select target_org is not null
+    and target_client is not null
+    and exists (
+      select 1
+      from public.organization_members om
+      where om.user_id = auth.uid()
+        and om.organization_id = target_org
+        and om.role = 'client'
+    )
+    and exists (
+      select 1
+      from public.clients c
+      where c.id = target_client
+        and c.organization_id = target_org
+        and lower(coalesce(auth.jwt() ->> 'email', '')) in (
+          lower(coalesce(c.email, '')),
+          lower(coalesce(c.billing_email, ''))
+        )
+    );
+$$;
+
+create or replace function public.current_user_is_client_for_customer(target_org uuid, target_client uuid, target_customer uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select (
+    target_customer is not null
+    and target_customer = auth.uid()
+    and exists (
+      select 1
+      from public.organization_members om
+      where om.user_id = auth.uid()
+        and om.organization_id = target_org
+        and om.role = 'client'
+    )
+  )
+  or public.current_user_is_client_for_client(target_org, target_client);
+$$;
 
 alter table public.organizations enable row level security;
 alter table public.organization_members enable row level security;
