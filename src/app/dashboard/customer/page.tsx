@@ -19,6 +19,7 @@ export default async function CustomerDashboard() {
   const actions = [
     { href: '/dashboard/customer/request', label: 'Request Service', desc: 'Schedule swap, pickup, or delivery' },
     { href: '/dashboard/customer/tracking', label: 'Live Tracking', desc: 'Track confirmed service' },
+    { href: '/dashboard/customer/billing', label: 'Project Billing', desc: 'Review invoice breakdowns and active balances' },
   ]
 
   return (
@@ -41,7 +42,7 @@ export default async function CustomerDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {actions.map(action => (
           <Link key={action.href} href={action.href} className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 transition-all hover:bg-slate-800/60 group">
             <div className="font-semibold text-white text-sm">{action.label}</div>

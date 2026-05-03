@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
+import { calculatePrice, money, type ServiceCode } from '@/lib/pricing'
 
 type InvoiceRow = {
   id: string
@@ -169,10 +170,6 @@ const DEMO_DAILY_REPORTS: DailyReport[] = [
   },
 ]
 
-function money(value: unknown) {
-  return Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
-}
-
 function asDateInput(value?: string | null) {
   if (!value) return ''
   const date = new Date(value)
@@ -234,15 +231,15 @@ function operationClass(operation: OperationName) {
 }
 
 function operationRate(operation: OperationName) {
-  if (operation === 'delivery') return 185
-  if (operation === 'pickup') return 165
-  if (operation === 'water_removal') return 225
-  return 145
+  const code: ServiceCode = operation === 'delivery' ? 'delivery' : operation === 'pickup' ? 'pickup' : operation === 'water_removal' ? 'water_removal' : 'relocate'
+  return calculatePrice({ serviceCode: code, quantity: 1, miles: 24 }).total
 }
 
 function demoInvoiceRows(events: OperationEvent[]): InvoiceRow[] {
   return events.map(event => {
-    const amount = operationRate(event.operation)
+    const code: ServiceCode = event.operation === 'delivery' ? 'delivery' : event.operation === 'pickup' ? 'pickup' : event.operation === 'water_removal' ? 'water_removal' : 'relocate'
+    const price = calculatePrice({ serviceCode: code, quantity: 1, miles: 24 })
+    const amount = price.total
     return {
       id: `demo-invoice-${event.id}`,
       invoice_number: `DEMO-${event.date.replace(/-/g, '')}-${event.binNumber}`,
@@ -257,7 +254,7 @@ function demoInvoiceRows(events: OperationEvent[]): InvoiceRow[] {
       source_file: 'Demo daily invoice',
       source_row: event.sourceRow,
       audit_hash: hashOperation(event),
-      notes: `${operationLabel(event.operation)} for ${event.projectName} bin ${event.binNumber}`,
+      notes: JSON.stringify({ projectName: event.projectName, binNumber: event.binNumber, pricingLines: price.lines }),
     }
   })
 }

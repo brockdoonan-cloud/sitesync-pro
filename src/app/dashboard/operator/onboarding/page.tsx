@@ -11,6 +11,8 @@ const emptyJobsite = { name: '', address: '', lat: '', lng: '', client_id: '', s
 const emptyEquipment = { bin_number: '', type: 'other', status: 'available', location: '', client_id: '', jobsite_id: '' }
 const emptyRequest = { address: '', city: '', zip: '', equipment_type: '', scheduled_date: '', notes: '', status: 'confirmed' }
 const emptyInvoice = { invoice_number: '', client_id: '', total: '', status: 'open' }
+const emptyTruck = { truck_number: '', driver_name: '', capacity: '6', status: 'available' }
+const emptyPricing = { name: '', included_miles: '30', one_bin_service: '395', extra_mile_rate: '4.5', fuel_surcharge_percent: '14', environmental_fee: '25' }
 
 function todayId(prefix: string) {
   return `${prefix}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 900 + 100)}`
@@ -25,6 +27,8 @@ export default function OperatorOnboardingPage() {
   const [equipment, setEquipment] = useState(emptyEquipment)
   const [request, setRequest] = useState(emptyRequest)
   const [invoice, setInvoice] = useState(emptyInvoice)
+  const [truck, setTruck] = useState(emptyTruck)
+  const [pricing, setPricing] = useState(emptyPricing)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -137,6 +141,35 @@ export default function OperatorOnboardingPage() {
     const { error: fallbackError } = await supabase.from('invoices').insert(fallbackPayload)
     if (fallbackError) throw fallbackError
     setInvoice(emptyInvoice)
+  })
+
+  const saveTruck = () => run('Truck', async () => {
+    if (!truck.truck_number) throw new Error('Add a truck number.')
+    const { error } = await supabase.from('trucks').insert({
+      truck_number: truck.truck_number,
+      driver_name: truck.driver_name || null,
+      capacity: Number(truck.capacity || 6),
+      status: truck.status,
+      last_seen: new Date().toISOString(),
+    })
+    if (error) throw error
+    setTruck(emptyTruck)
+  })
+
+  const savePricing = () => run('Pricing profile', async () => {
+    if (!pricing.name) throw new Error('Add a pricing profile name.')
+    const { error } = await supabase.from('pricing_profiles').insert({
+      name: pricing.name,
+      yard_address: '255 S Orange Ave, Orlando, FL 32801',
+      included_miles: Number(pricing.included_miles),
+      one_bin_service: Number(pricing.one_bin_service),
+      extra_mile_rate: Number(pricing.extra_mile_rate),
+      fuel_surcharge_percent: Number(pricing.fuel_surcharge_percent),
+      environmental_fee: Number(pricing.environmental_fee),
+      active: true,
+    })
+    if (error) throw error
+    setPricing(emptyPricing)
   })
 
   return (
@@ -252,6 +285,35 @@ export default function OperatorOnboardingPage() {
             </select>
           </div>
           <button disabled={loading} onClick={saveInvoice} className="btn-primary px-4 py-2">Save Balance</button>
+        </section>
+
+        <section className="card space-y-4">
+          <div><h2 className="font-semibold text-white">6. Pricing Profile</h2><p className="text-xs text-slate-500 mt-1">Stores the customer rate card for mileage, fuel, environmental fees, and invoice breakdowns.</p></div>
+          <input className="input" placeholder="Pricing profile name" value={pricing.name} onChange={e => setPricing(v => ({ ...v, name: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <input className="input" placeholder="Included miles" value={pricing.included_miles} onChange={e => setPricing(v => ({ ...v, included_miles: e.target.value }))} />
+            <input className="input" placeholder="Extra mile rate" value={pricing.extra_mile_rate} onChange={e => setPricing(v => ({ ...v, extra_mile_rate: e.target.value }))} />
+            <input className="input" placeholder="One-bin service" value={pricing.one_bin_service} onChange={e => setPricing(v => ({ ...v, one_bin_service: e.target.value }))} />
+            <input className="input" placeholder="Fuel %" value={pricing.fuel_surcharge_percent} onChange={e => setPricing(v => ({ ...v, fuel_surcharge_percent: e.target.value }))} />
+            <input className="input" placeholder="Environmental fee" value={pricing.environmental_fee} onChange={e => setPricing(v => ({ ...v, environmental_fee: e.target.value }))} />
+          </div>
+          <button disabled={loading} onClick={savePricing} className="btn-primary px-4 py-2">Save Pricing</button>
+        </section>
+
+        <section className="card space-y-4">
+          <div><h2 className="font-semibold text-white">7. Truck / Driver</h2><p className="text-xs text-slate-500 mt-1">Adds fleet capacity so dispatch can assign routes to real trucks.</p></div>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="input" placeholder="Truck number" value={truck.truck_number} onChange={e => setTruck(v => ({ ...v, truck_number: e.target.value }))} />
+            <input className="input" placeholder="Driver name" value={truck.driver_name} onChange={e => setTruck(v => ({ ...v, driver_name: e.target.value }))} />
+            <input className="input" placeholder="Swap capacity" value={truck.capacity} onChange={e => setTruck(v => ({ ...v, capacity: e.target.value }))} />
+            <select className="input" value={truck.status} onChange={e => setTruck(v => ({ ...v, status: e.target.value }))}>
+              <option value="available">Available</option>
+              <option value="en_route">En route</option>
+              <option value="servicing">Servicing</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
+          <button disabled={loading} onClick={saveTruck} className="btn-primary px-4 py-2">Save Truck</button>
         </section>
       </div>
     </div>

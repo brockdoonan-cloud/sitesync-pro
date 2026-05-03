@@ -12,7 +12,7 @@ begin
     select schemaname, tablename, policyname
     from pg_policies
     where schemaname = 'public'
-      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'trucks', 'truck_locations', 'driver_routes', 'route_stops', 'billing_events', 'billing_import_batches', 'daily_operation_events')
+      and tablename in ('profiles', 'clients', 'jobsites', 'equipment', 'service_requests', 'invoices', 'trucks', 'truck_locations', 'driver_routes', 'route_stops', 'pricing_profiles', 'billing_events', 'billing_import_batches', 'daily_operation_events')
   loop
     execute format('drop policy if exists %I on %I.%I', policy_row.policyname, policy_row.schemaname, policy_row.tablename);
   end loop;
@@ -126,12 +126,34 @@ create table if not exists public.trucks (
 
 alter table public.trucks
   add column if not exists truck_number text,
+  add column if not exists driver_name text,
   add column if not exists status text default 'available',
   add column if not exists capacity int default 6,
   add column if not exists lat double precision,
   add column if not exists lng double precision,
   add column if not exists last_seen timestamptz,
   add column if not exists created_at timestamptz default now();
+
+create table if not exists public.pricing_profiles (
+  id uuid default gen_random_uuid() primary key,
+  client_id uuid,
+  name text not null,
+  yard_address text,
+  included_miles numeric default 30,
+  extra_mile_rate numeric default 4.5,
+  one_bin_service numeric default 395,
+  two_bin_service numeric default 350,
+  water_pumpout numeric default 395,
+  relocate numeric default 395,
+  onsite_relocate numeric default 150,
+  monthly_usage numeric default 150,
+  fuel_surcharge_percent numeric default 14,
+  environmental_fee numeric default 25,
+  trash_fee numeric default 350,
+  dead_run numeric default 395,
+  active boolean default true,
+  created_at timestamptz default now()
+);
 
 create table if not exists public.truck_locations (
   id uuid default gen_random_uuid() primary key,
@@ -271,6 +293,9 @@ create index if not exists driver_routes_route_date_idx
 create index if not exists route_stops_route_order_idx
   on public.route_stops (route_id, stop_order);
 
+create index if not exists pricing_profiles_client_idx
+  on public.pricing_profiles (client_id, active);
+
 -- 3) Allow authenticated operator workflows to load operational data.
 alter table public.clients enable row level security;
 alter table public.jobsites enable row level security;
@@ -280,6 +305,7 @@ alter table public.trucks enable row level security;
 alter table public.truck_locations enable row level security;
 alter table public.driver_routes enable row level security;
 alter table public.route_stops enable row level security;
+alter table public.pricing_profiles enable row level security;
 alter table public.invoices enable row level security;
 alter table public.billing_events enable row level security;
 alter table public.billing_import_batches enable row level security;
@@ -322,6 +348,11 @@ create policy "authenticated manage driver routes"
 
 create policy "authenticated manage route stops"
   on public.route_stops for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+create policy "authenticated manage pricing profiles"
+  on public.pricing_profiles for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 

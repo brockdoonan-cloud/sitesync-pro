@@ -29,6 +29,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/operator/routes', label: t('routes') },
     { href: '/dashboard/operator/map', label: t('map') },
     { href: '/dashboard/operator/equipment', label: t('equipment') },
+    { href: '/dashboard/operator/pricing', label: 'Pricing' },
     { href: '/dashboard/operator/trucks', label: t('trucks') },
     { href: '/dashboard/operator/clients', label: t('clients') },
     { href: '/dashboard/operator/billing', label: t('billing') },
@@ -37,6 +38,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/customer', label: t('overview') },
     { href: '/dashboard/customer/request', label: t('requestService') },
     { href: '/dashboard/customer/tracking', label: t('track') },
+    { href: '/dashboard/customer/billing', label: t('billing') },
   ]
   const links = isOp ? opLinks : custLinks
 

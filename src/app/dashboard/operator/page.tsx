@@ -24,6 +24,7 @@ export default async function OperatorDashboard() {
     { href: '/dashboard/operator/jobs', label: 'Jobs', desc: 'Active service jobs' },
     { href: '/dashboard/operator/leads', label: 'Quote Leads', desc: 'New quote requests', highlight: stats.leads > 0 },
     { href: '/dashboard/operator/equipment', label: 'Equipment', desc: 'Bins and containers' },
+    { href: '/dashboard/operator/pricing', label: 'Pricing', desc: 'Rates, mileage, and invoice breakdowns' },
     { href: '/dashboard/operator/map', label: 'Equipment Map', desc: 'Swap status by jobsite' },
     { href: '/dashboard/operator/clients', label: 'Clients', desc: 'Client accounts' },
     { href: '/dashboard/operator/requests', label: 'Requests', desc: 'Service requests' },
