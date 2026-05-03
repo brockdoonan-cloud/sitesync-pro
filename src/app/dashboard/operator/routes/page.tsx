@@ -293,7 +293,7 @@ function assignRoutes(stops: Stop[], trucks: Truck[]) {
 }
 
 function mapsRouteUrl(stops: Stop[], start = HOME_BASE.address) {
-  const waypoints = stops.slice(0, 9).map(stop => encodeURIComponent(addressFor(stop))).join('/')
+  const waypoints = stops.flatMap(routeAddressesForStop).slice(0, 9).map(stop => encodeURIComponent(stop)).join('/')
   return `https://www.google.com/maps/dir/${encodeURIComponent(start)}/${waypoints}`
 }
 
@@ -307,6 +307,28 @@ function routeStopType(stop: Stop) {
 
 function jobsiteNameFromNotes(notes?: string | null) {
   return notes?.match(/Jobsite:\s*([^.]+)/i)?.[1]?.trim()
+}
+
+function noteField(notes: string | null | undefined, label: string) {
+  return notes?.match(new RegExp(`${label}:\\s*([^.]+)`, 'i'))?.[1]?.trim()
+}
+
+function swapPlanFromNotes(notes?: string | null) {
+  return {
+    pickupBin: noteField(notes, 'Pickup bin'),
+    landfill: noteField(notes, 'Landfill'),
+    dropoffJobsite: noteField(notes, 'Next jobsite'),
+    dropoffAddress: noteField(notes, 'Dropoff address'),
+  }
+}
+
+function routeAddressesForStop(stop: Stop) {
+  const plan = swapPlanFromNotes(stop.request?.notes)
+  return [
+    addressFor(stop),
+    plan.landfill,
+    plan.dropoffAddress || plan.dropoffJobsite,
+  ].filter(Boolean) as string[]
 }
 
 function isUuid(value: string) {
@@ -531,7 +553,17 @@ export default function RoutesPage() {
   const [loading, setLoading] = useState(true)
   const [savingPlan, setSavingPlan] = useState(false)
   const [message, setMessage] = useState('')
-  const [manual, setManual] = useState({ jobsiteName: '', address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+  const [manual, setManual] = useState({
+    jobsiteName: '',
+    address: '',
+    binNumber: '',
+    landfill: '',
+    dropoffJobsite: '',
+    dropoffAddress: '',
+    serviceType: 'swap',
+    date: new Date().toISOString().slice(0, 10),
+    notes: '',
+  })
   const [usingDemo, setUsingDemo] = useState(true)
   const [filter, setFilter] = useState<'swap' | 'all'>('swap')
   const [selectedTruck, setSelectedTruck] = useState(DEMO_TRUCKS[0].id)
@@ -635,7 +667,15 @@ export default function RoutesPage() {
     }
     setLoading(true)
     setMessage('')
-    const notes = [`Manual dispatch entry.`, jobsiteName ? `Jobsite: ${jobsiteName}.` : '', manual.binNumber ? `Bin #${manual.binNumber}.` : '', manual.notes].filter(Boolean).join(' ')
+    const notes = [
+      `Manual dispatch entry.`,
+      jobsiteName ? `Jobsite: ${jobsiteName}.` : '',
+      manual.binNumber ? `Pickup bin: ${manual.binNumber}.` : '',
+      manual.landfill.trim() ? `Landfill: ${manual.landfill.trim()}.` : '',
+      manual.dropoffJobsite.trim() ? `Next jobsite: ${manual.dropoffJobsite.trim()}.` : '',
+      manual.dropoffAddress.trim() ? `Dropoff address: ${manual.dropoffAddress.trim()}.` : '',
+      manual.notes,
+    ].filter(Boolean).join(' ')
     const { error } = await supabase.from('service_requests').insert({
       service_type: manual.serviceType,
       jobsite_address: location,
@@ -652,7 +692,7 @@ export default function RoutesPage() {
       setLoading(false)
       return
     }
-    setManual({ jobsiteName: '', address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+    setManual({ jobsiteName: '', address: '', binNumber: '', landfill: '', dropoffJobsite: '', dropoffAddress: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
     setMessage('Manual dispatch stop added and routed.')
     await load()
   }
@@ -784,16 +824,16 @@ export default function RoutesPage() {
         <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
           <div className="flex flex-col md:flex-row md:items-end gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-400 mb-1">Jobsite name or project</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Pickup jobsite or project</label>
               <input className="input" value={manual.jobsiteName} onChange={event => setManual(prev => ({ ...prev, jobsiteName: event.target.value }))} placeholder="Project Neptune, Cocoa, Reserve of Twin Lakes..." />
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-400 mb-1">Address if known</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Pickup address if known</label>
               <input className="input" value={manual.address} onChange={event => setManual(prev => ({ ...prev, address: event.target.value }))} placeholder="123 Jobsite Rd, Orlando, FL" />
             </div>
             <div className="md:w-36">
-              <label className="block text-xs font-medium text-slate-400 mb-1">Bin number</label>
-              <input className="input font-mono" value={manual.binNumber} onChange={event => setManual(prev => ({ ...prev, binNumber: event.target.value }))} placeholder="876907" />
+              <label className="block text-xs font-medium text-slate-400 mb-1">Pickup bin</label>
+              <input className="input font-mono" value={manual.binNumber} onChange={event => setManual(prev => ({ ...prev, binNumber: event.target.value }))} placeholder="121872" />
             </div>
             <div className="md:w-40">
               <label className="block text-xs font-medium text-slate-400 mb-1">Service</label>
@@ -808,6 +848,20 @@ export default function RoutesPage() {
             <div className="md:w-40">
               <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
               <input type="date" className="input" value={manual.date} onChange={event => setManual(prev => ({ ...prev, date: event.target.value }))} />
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Closest landfill / dump</label>
+              <input className="input" value={manual.landfill} onChange={event => setManual(prev => ({ ...prev, landfill: event.target.value }))} placeholder="Orange County Landfill, Orlando, FL" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Next jobsite</label>
+              <input className="input" value={manual.dropoffJobsite} onChange={event => setManual(prev => ({ ...prev, dropoffJobsite: event.target.value }))} placeholder="Project LaBrea, bin #131074..." />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Next address if known</label>
+              <input className="input" value={manual.dropoffAddress} onChange={event => setManual(prev => ({ ...prev, dropoffAddress: event.target.value }))} placeholder="9801 International Dr, Orlando, FL" />
             </div>
           </div>
           <div className="mt-3 flex flex-col md:flex-row gap-3">
@@ -863,6 +917,7 @@ export default function RoutesPage() {
               <div className="space-y-3">
                 {selectedRoute.stops.map((stop, index) => {
                   const urgent = stop.equipment.filter(needsSwap)
+                  const swapPlan = swapPlanFromNotes(stop.request?.notes)
                   return (
                     <div key={stop.id} className="flex gap-3">
                       <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${urgent.length ? 'bg-red-500/20 border-red-500/40 text-red-300' : 'bg-green-500/15 border-green-500/30 text-green-300'}`}>{index + 1}</div>
@@ -870,6 +925,14 @@ export default function RoutesPage() {
                         <div className="text-sm font-medium text-white truncate">{stop.name || addressFor(stop)}</div>
                         <div className="text-xs text-slate-400 truncate">{addressFor(stop)}</div>
                         <div className="text-xs text-slate-500 mt-1">{(stop.distanceFromPrevious || 0).toFixed(1)} mi | {urgent.length} swap bins | {stop.equipment.length} total bins</div>
+                        {(swapPlan.pickupBin || swapPlan.landfill || swapPlan.dropoffJobsite || swapPlan.dropoffAddress) && (
+                          <div className="mt-2 rounded-lg border border-slate-700/60 bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
+                            <div className="font-semibold text-white">Swap chain</div>
+                            <div>1. Pick up {swapPlan.pickupBin ? `bin #${swapPlan.pickupBin}` : 'assigned bin'} from {stop.name || addressFor(stop)}</div>
+                            <div>2. Dump/clean at {swapPlan.landfill || 'closest landfill'}</div>
+                            <div>3. Drop at {swapPlan.dropoffJobsite || swapPlan.dropoffAddress || 'next assigned jobsite'}</div>
+                          </div>
+                        )}
                         {stop.request && (
                           <button
                             type="button"
