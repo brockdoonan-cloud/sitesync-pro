@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calculatePrice, money, serviceLabel, type PriceLine, type ServiceCode } from '@/lib/pricing'
+import { calculatePrice, money, type PriceLine, type ServiceCode } from '@/lib/pricing'
 
 type InvoiceRow = {
   id: string
@@ -56,6 +56,7 @@ export default function CustomerBillingPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -114,45 +115,57 @@ export default function CustomerBillingPage() {
           {invoices.map(invoice => {
             const lines = parseLines(invoice.notes)
             const total = Number(invoice.total || invoice.amount || 0)
+            const balance = Number(invoice.balance || total)
+            const isOpen = openInvoiceId === invoice.id
             return (
-              <section key={invoice.id} className="card space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <section key={invoice.id} className="card overflow-hidden p-0">
+                <button
+                  type="button"
+                  onClick={() => setOpenInvoiceId(isOpen ? null : invoice.id)}
+                  className="flex w-full flex-col gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-800/50 sm:flex-row sm:items-start sm:justify-between"
+                  aria-expanded={isOpen}
+                >
                   <div>
                     <h2 className="font-semibold text-white">{invoice.invoice_number || invoice.id.slice(0, 8)}</h2>
                     <p className="text-xs text-slate-500">{invoice.client_name || invoice.customer_name || 'Customer'} | {invoice.service_date || invoice.invoice_date || 'Date pending'}</p>
+                    <p className="mt-1 text-xs text-sky-300">{isOpen ? 'Close invoice breakdown' : 'Open invoice breakdown'}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="sm:text-right">
                     <div className="text-xl font-bold text-white">{money(total)}</div>
-                    <div className="text-xs text-slate-500 capitalize">{invoice.status || 'open'}</div>
+                    <div className="text-xs text-slate-500 capitalize">{invoice.status || 'open'} | Balance {money(balance)}</div>
                   </div>
-                </div>
+                </button>
 
-                {lines.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-xs uppercase tracking-wide text-slate-500">
-                        <tr className="border-b border-slate-700/50">
-                          <th className="px-3 py-2 text-left">Charge</th>
-                          <th className="px-3 py-2 text-right">Qty</th>
-                          <th className="px-3 py-2 text-right">Rate</th>
-                          <th className="px-3 py-2 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lines.map((line, index) => (
-                          <tr key={`${line.label}-${index}`} className="border-b border-slate-700/30 last:border-0">
-                            <td className="px-3 py-2 text-slate-200">{line.label}</td>
-                            <td className="px-3 py-2 text-right text-slate-400">{line.quantity}</td>
-                            <td className="px-3 py-2 text-right text-slate-400">{money(line.rate)}</td>
-                            <td className="px-3 py-2 text-right text-white">{money(line.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-4 py-3 text-sm text-slate-400">
-                    Imported invoice total. Detailed pricing lines will show for invoices created through SiteSync pricing.
+                {isOpen && (
+                  <div className="border-t border-slate-700/50 px-5 py-4">
+                    {lines.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-xs uppercase tracking-wide text-slate-500">
+                            <tr className="border-b border-slate-700/50">
+                              <th className="px-3 py-2 text-left">Charge</th>
+                              <th className="px-3 py-2 text-right">Qty</th>
+                              <th className="px-3 py-2 text-right">Rate</th>
+                              <th className="px-3 py-2 text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lines.map((line, index) => (
+                              <tr key={`${line.label}-${index}`} className="border-b border-slate-700/30 last:border-0">
+                                <td className="px-3 py-2 text-slate-200">{line.label}</td>
+                                <td className="px-3 py-2 text-right text-slate-400">{line.quantity}</td>
+                                <td className="px-3 py-2 text-right text-slate-400">{money(line.rate)}</td>
+                                <td className="px-3 py-2 text-right text-white">{money(line.amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 px-4 py-3 text-sm text-slate-400">
+                        Imported invoice total. Detailed pricing lines will show for invoices created through SiteSync pricing.
+                      </div>
+                    )}
                   </div>
                 )}
               </section>

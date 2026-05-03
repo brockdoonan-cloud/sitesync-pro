@@ -66,6 +66,22 @@ type BillingBatch = {
   endingBalance: number
 }
 
+type InvoiceBreakdownLine = {
+  label: string
+  quantity: number
+  rate: number
+  amount: number
+  balance?: number
+  sourceRow?: number
+}
+
+type InvoiceBreakdownMeta = {
+  projectName?: string
+  binNumber?: string
+  importedAt?: string
+  lineCount?: number
+}
+
 type OperationName = 'delivery' | 'pickup' | 'water_removal' | 'relocate'
 
 type OperationEvent = {
@@ -388,6 +404,59 @@ function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
   URL.revokeObjectURL(url)
 }
 
+function parseInvoiceNotes(notes?: string | null): Record<string, unknown> {
+  if (!notes) return {}
+  try {
+    const parsed = JSON.parse(notes)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+function textField(value: unknown) {
+  return typeof value === 'string' ? value : undefined
+}
+
+function numberField(value: unknown) {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function invoiceBreakdown(invoice: InvoiceRow) {
+  const parsed = parseInvoiceNotes(invoice.notes)
+  const meta: InvoiceBreakdownMeta = {
+    projectName: textField(parsed.projectName),
+    binNumber: textField(parsed.binNumber),
+    importedAt: textField(parsed.importedAt),
+    lineCount: typeof parsed.lineCount === 'number' ? parsed.lineCount : undefined,
+  }
+  const pricingLines = Array.isArray(parsed.pricingLines) ? parsed.pricingLines : []
+  const importedLines = Array.isArray(parsed.lines) ? parsed.lines : []
+  const lines: InvoiceBreakdownLine[] = pricingLines.length > 0
+    ? pricingLines.map(line => {
+      const row = line as Record<string, unknown>
+      return {
+        label: textField(row.label) || 'Service charge',
+        quantity: numberField(row.quantity),
+        rate: numberField(row.rate),
+        amount: numberField(row.amount),
+      }
+    })
+    : importedLines.map(line => {
+      const row = line as Record<string, unknown>
+      return {
+        label: textField(row.memo) || textField(row.item) || 'Imported billing line',
+        quantity: numberField(row.qty),
+        rate: numberField(row.rate),
+        amount: numberField(row.amount),
+        balance: numberField(row.balance),
+        sourceRow: typeof row.sourceRow === 'number' ? row.sourceRow : undefined,
+      }
+    })
+  return { lines, meta }
+}
+
 export default function BillingPage() {
   const supabase = useMemo(() => createClient(), [])
   const [selectedDate, setSelectedDate] = useState(demoDefaultDate)
@@ -400,6 +469,7 @@ export default function BillingPage() {
   const [saving, setSaving] = useState(false)
   const [savingDailyReport, setSavingDailyReport] = useState(false)
   const [query, setQuery] = useState('')
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -831,21 +901,87 @@ export default function BillingPage() {
           <h2 className="font-semibold text-white">Invoices for {selectedDate}</h2>
           {loading ? <p className="text-slate-400 text-sm">Loading billing records...</p> : displayInvoices.length > 0 ? displayInvoices.map(invoice => {
             const amount = invoice.total || invoice.amount || 0
+            const balance = Number(invoice.balance || amount || 0)
             const invoiceNumber = invoice.invoice_number || invoice.id.slice(0, 8)
+            const isOpen = openInvoiceId === invoice.id
+            const breakdown = invoiceBreakdown(invoice)
             return (
-              <div key={invoice.id} className="rounded-lg bg-slate-700/30 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
+              <div key={invoice.id} className="overflow-hidden rounded-lg bg-slate-700/30">
+                <button
+                  type="button"
+                  onClick={() => setOpenInvoiceId(isOpen ? null : invoice.id)}
+                  className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-700/40"
+                  aria-expanded={isOpen}
+                >
                   <div>
                     <div className="font-medium text-white">{invoiceNumber}</div>
                     <div className="text-xs text-slate-500">{invoice.client_name || invoice.customer_name || invoice.client_id || 'Client not linked'}</div>
+                    {(breakdown.meta.projectName || breakdown.meta.binNumber) && (
+                      <div className="text-xs text-slate-400 mt-1">
+                        {[breakdown.meta.projectName, breakdown.meta.binNumber ? `Bin #${breakdown.meta.binNumber}` : ''].filter(Boolean).join(' | ')}
+                      </div>
+                    )}
                     {invoice.source_file && <div className="text-xs text-sky-300 mt-1">{invoice.source_file} row {invoice.source_row || '-'}</div>}
                   </div>
                   <div className="text-right">
                     <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs capitalize ${statusClass(invoice.status)}`}>{invoice.status || 'draft'}</span>
                     <div className="text-white font-semibold mt-1">{money(amount)}</div>
+                    <div className="mt-1 text-xs text-sky-300">{isOpen ? 'Close breakdown' : 'Open breakdown'}</div>
                   </div>
-                </div>
-                {invoice.audit_hash && <div className="mt-2 font-mono text-xs text-slate-500">Trace {invoice.audit_hash}</div>}
+                </button>
+                {isOpen && (
+                  <div className="border-t border-slate-600/40 px-4 py-3">
+                    <div className="mb-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                      <div>
+                        <div className="text-slate-500">Invoice date</div>
+                        <div className="text-slate-200">{asDateInput(invoice.invoice_date || invoice.service_date || invoice.created_at) || 'Pending'}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Balance</div>
+                        <div className="text-slate-200">{money(balance)}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Lines</div>
+                        <div className="text-slate-200">{breakdown.lines.length || breakdown.meta.lineCount || 0}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500">Trace</div>
+                        <div className="truncate font-mono text-sky-300">{invoice.audit_hash || 'Not assigned'}</div>
+                      </div>
+                    </div>
+                    {breakdown.lines.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-xs uppercase tracking-wide text-slate-500">
+                            <tr className="border-b border-slate-600/50">
+                              <th className="px-3 py-2 text-left">Charge</th>
+                              <th className="px-3 py-2 text-right">Qty</th>
+                              <th className="px-3 py-2 text-right">Rate</th>
+                              <th className="px-3 py-2 text-right">Amount</th>
+                              <th className="px-3 py-2 text-right">Source</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {breakdown.lines.map((line, index) => (
+                              <tr key={`${line.label}-${line.sourceRow || index}`} className="border-b border-slate-700/30 last:border-0">
+                                <td className="px-3 py-2 text-slate-200">{line.label}</td>
+                                <td className="px-3 py-2 text-right text-slate-400">{line.quantity || 1}</td>
+                                <td className="px-3 py-2 text-right text-slate-400">{money(line.rate)}</td>
+                                <td className="px-3 py-2 text-right text-white">{money(line.amount)}</td>
+                                <td className="px-3 py-2 text-right text-slate-500">{line.sourceRow ? `Row ${line.sourceRow}` : '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-slate-600/50 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
+                        No line-level breakdown is stored for this invoice yet. Imported invoices will show source rows after they are saved through the billing trace importer.
+                      </div>
+                    )}
+                    {breakdown.meta.importedAt && <div className="mt-3 text-xs text-slate-500">Imported {new Date(breakdown.meta.importedAt).toLocaleString()}</div>}
+                  </div>
+                )}
               </div>
             )
           }) : <p className="text-slate-400 text-sm">No invoices found for this day.</p>}
