@@ -18,7 +18,18 @@ export default function RequestServicePage() {
     setLoading(true); setError('')
     const { data: { user } } = await supabase.auth.getUser()
     const notes = [form.time_preference ? `Preferred time: ${form.time_preference}.` : '', form.bin_number ? `Bin #${form.bin_number}.` : '', form.notes].filter(Boolean).join(' ')
-    const { error: err } = await supabase.from('service_requests').insert({ customer_id: user!.id, service_type: form.service_type, jobsite_address: form.jobsite_address, preferred_date: form.preferred_date || null, notes, status: 'pending' })
+    const { error: err } = await supabase.from('service_requests').insert({
+      customer_id: user!.id,
+      service_type: form.service_type,
+      jobsite_address: form.jobsite_address,
+      service_address: form.jobsite_address,
+      preferred_date: form.preferred_date || null,
+      scheduled_date: form.preferred_date || null,
+      bin_number: form.bin_number || null,
+      priority: form.service_type === 'emergency' ? 'urgent' : form.service_type === 'swap' ? 'high' : 'normal',
+      notes,
+      status: 'dispatch_ready',
+    })
     if (err) { setError(err.message); setLoading(false) } else { setSuccess(true) }
   }
 

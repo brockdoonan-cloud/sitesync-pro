@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-const STATUSES = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']
+const STATUSES = ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled']
 export default function UpdateRequestStatus({ requestId, currentStatus }: { requestId: string; currentStatus: string }) {
   const [status, setStatus] = useState(currentStatus)
   const [loading, setLoading] = useState(false)

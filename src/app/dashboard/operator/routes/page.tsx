@@ -25,6 +25,20 @@ type Equipment = {
   last_serviced_at?: string
 }
 
+type ServiceRequest = {
+  id: string
+  service_type?: string | null
+  jobsite_address?: string | null
+  service_address?: string | null
+  bin_number?: string | null
+  status?: string | null
+  preferred_date?: string | null
+  scheduled_date?: string | null
+  priority?: string | null
+  notes?: string | null
+  jobsite_id?: string | null
+}
+
 type Truck = {
   id: string
   truck_number: string
@@ -38,6 +52,7 @@ type Truck = {
 
 type Stop = Jobsite & {
   equipment: Equipment[]
+  request?: ServiceRequest
   priorityScore: number
   distanceFromPrevious?: number
 }
@@ -199,6 +214,16 @@ function priorityScore(site: Jobsite, equipment: Equipment[]) {
   return urgent * 12 + aging * 4 + activeBoost
 }
 
+function requestPriorityScore(request: ServiceRequest) {
+  const service = (request.service_type || '').toLowerCase()
+  const priority = (request.priority || '').toLowerCase()
+  let score = 10
+  if (['urgent', 'emergency'].includes(priority) || service === 'emergency') score += 28
+  if (['high'].includes(priority) || ['swap', 'pump_out', 'water_removal'].includes(service)) score += 16
+  if (request.bin_number) score += 4
+  return score
+}
+
 function roughCoord(site: Jobsite) {
   if (typeof site.lat === 'number' && typeof site.lng === 'number') return { lat: site.lat, lng: site.lng }
   const text = addressFor(site).toLowerCase()
@@ -274,6 +299,14 @@ function mapsRouteUrl(stops: Stop[], start = HOME_BASE.address) {
 
 function mapsSearchUrl(site: Jobsite) {
   return `https://www.google.com/maps/search/${encodeURIComponent(addressFor(site))}`
+}
+
+function routeStopType(stop: Stop) {
+  return stop.request?.service_type || (stop.equipment.some(needsSwap) ? 'swap' : 'service')
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function liveTruckPosition(truck: Truck, stops: Stop[], tick: number) {
@@ -492,21 +525,31 @@ export default function RoutesPage() {
   const [sites, setSites] = useState<Stop[]>(DEMO_STOPS)
   const [trucks, setTrucks] = useState<Truck[]>(DEMO_TRUCKS)
   const [loading, setLoading] = useState(true)
+  const [savingPlan, setSavingPlan] = useState(false)
+  const [message, setMessage] = useState('')
+  const [manual, setManual] = useState({ address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
   const [usingDemo, setUsingDemo] = useState(true)
   const [filter, setFilter] = useState<'swap' | 'all'>('swap')
   const [selectedTruck, setSelectedTruck] = useState(DEMO_TRUCKS[0].id)
   const [tick, setTick] = useState(0)
+  const supabase = useMemo(() => createClient(), [])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const supabase = createClient()
-    const [{ data: jobsites }, { data: equipment }, { data: truckRows }] = await Promise.all([
+    setMessage('')
+    const [{ data: jobsites }, { data: equipment }, { data: truckRows }, { data: serviceRequests }] = await Promise.all([
       supabase.from('jobsites').select('id,name,address,city,state,zip,lat,lng,status').order('status', { ascending: true }),
       supabase.from('equipment').select('id,bin_number,status,location,jobsite_id,last_serviced_at').order('bin_number', { ascending: true }),
       supabase.from('trucks').select('id,truck_number,status').order('truck_number', { ascending: true }),
+      supabase
+        .from('service_requests')
+        .select('id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
+        .in('status', ['dispatch_ready', 'pending', 'scheduled', 'confirmed', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(100),
     ])
 
-    const mapped = (jobsites || []).map((site: Jobsite) => {
+    const mappedSites: Stop[] = (jobsites || []).map((site: Jobsite) => {
       const siteEquipment = (equipment || []).filter((item: Equipment) => item.jobsite_id === site.id)
       return {
         ...site,
@@ -514,6 +557,26 @@ export default function RoutesPage() {
         priorityScore: priorityScore(site, siteEquipment),
       }
     }).filter((site: Stop) => site.equipment.length > 0)
+
+    const requestStops = (serviceRequests || []).map((request: ServiceRequest) => {
+      const linkedSite = mappedSites.find(site => site.id === request.jobsite_id)
+      const linkedEquipment = request.bin_number
+        ? (equipment || []).filter((item: Equipment) => item.bin_number === request.bin_number)
+        : []
+      return {
+        id: `request-${request.id}`,
+        name: `${(request.service_type || 'service').replace(/_/g, ' ')} request`,
+        address: request.jobsite_address || request.service_address || linkedSite?.address || 'Orlando, FL',
+        lat: linkedSite?.lat,
+        lng: linkedSite?.lng,
+        status: request.status || 'dispatch_ready',
+        equipment: linkedEquipment.length ? linkedEquipment : request.bin_number ? [{ id: `request-bin-${request.id}`, bin_number: request.bin_number, status: 'needs_swap', location: request.jobsite_address || request.service_address || 'Requested jobsite' }] : [],
+        request,
+        priorityScore: requestPriorityScore(request),
+      }
+    }) as Stop[]
+
+    const mapped = [...requestStops, ...mappedSites]
 
     const liveTrucks = (truckRows || []).slice(0, 4).map((truck: any, index: number) => ({
       id: truck.id,
@@ -538,7 +601,7 @@ export default function RoutesPage() {
       setUsingDemo(true)
     }
     setLoading(false)
-  }, [])
+  }, [supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -555,6 +618,92 @@ export default function RoutesPage() {
   const totalMiles = routes.reduce((sum, route) => sum + route.miles, 0)
   const swapBins = swapStops.reduce((sum, site) => sum + site.equipment.filter(needsSwap).length, 0)
   const totalBins = sites.reduce((sum, site) => sum + site.equipment.length, 0)
+  const dispatchRequests = sites.filter(site => site.request).length
+
+  const createManualSwap = async () => {
+    if (!manual.address.trim()) {
+      setMessage('Enter a jobsite address before adding a manual swap.')
+      return
+    }
+    setLoading(true)
+    setMessage('')
+    const notes = [`Manual dispatch entry.`, manual.binNumber ? `Bin #${manual.binNumber}.` : '', manual.notes].filter(Boolean).join(' ')
+    const { error } = await supabase.from('service_requests').insert({
+      service_type: manual.serviceType,
+      jobsite_address: manual.address,
+      service_address: manual.address,
+      bin_number: manual.binNumber || null,
+      preferred_date: manual.date || null,
+      scheduled_date: manual.date || null,
+      priority: manual.serviceType === 'emergency' ? 'urgent' : 'high',
+      status: 'dispatch_ready',
+      notes,
+    })
+    if (error) {
+      setMessage(`Manual swap was not saved: ${error.message}`)
+      setLoading(false)
+      return
+    }
+    setManual({ address: '', binNumber: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+    setMessage('Manual dispatch stop added and routed.')
+    await load()
+  }
+
+  const saveDispatchPlan = async () => {
+    if (!routes.length) return
+    setSavingPlan(true)
+    setMessage('')
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      await supabase.from('driver_routes').delete().eq('route_date', today).eq('status', 'planned')
+
+      let routeCount = 0
+      let stopCount = 0
+      for (const route of routes.filter(item => item.stops.length > 0)) {
+        const { data: savedRoute, error: routeError } = await supabase
+          .from('driver_routes')
+          .insert({
+            route_date: today,
+            truck_number: route.truck.truck_number,
+            driver_name: route.truck.driver,
+            status: 'planned',
+            start_address: HOME_BASE.address,
+            total_miles: Number(route.miles.toFixed(1)),
+            estimated_minutes: Math.round(route.miles * 3.2 + route.stops.length * 18),
+          })
+          .select('id')
+          .single()
+        if (routeError) throw routeError
+
+        const stopRows = route.stops.map((stop, index) => ({
+          route_id: savedRoute.id,
+          stop_order: index + 1,
+          jobsite_id: stop.request?.jobsite_id || (isUuid(stop.id) ? stop.id : null),
+          service_request_id: stop.request?.id || null,
+          address: addressFor(stop),
+          lat: roughCoord(stop).lat,
+          lng: roughCoord(stop).lng,
+          bin_numbers: stop.equipment.map(item => item.bin_number).filter(Boolean),
+          stop_type: routeStopType(stop),
+          status: 'planned',
+          notes: stop.request?.notes || `${stop.equipment.length} bins on site`,
+        }))
+        const { error: stopError } = await supabase.from('route_stops').insert(stopRows)
+        if (stopError) throw stopError
+        routeCount++
+        stopCount += stopRows.length
+      }
+
+      const requestIds = routes.flatMap(route => route.stops.map(stop => stop.request?.id).filter(Boolean) as string[])
+      if (requestIds.length > 0) await supabase.from('service_requests').update({ status: 'scheduled' }).in('id', requestIds)
+      setMessage(`Saved ${routeCount} driver route(s) and ${stopCount} stop(s).`)
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Could not save dispatch plan.')
+    } finally {
+      setSavingPlan(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -589,6 +738,7 @@ export default function RoutesPage() {
           { label: 'Swap Bins', value: swapBins, color: 'text-red-400' },
           { label: 'Bins Tracked', value: totalBins, color: 'text-green-400' },
           { label: 'Active Trucks', value: trucks.length, color: 'text-sky-400' },
+          { label: 'Dispatch Requests', value: dispatchRequests, color: 'text-yellow-300' },
           { label: 'Est. Miles', value: Math.round(totalMiles), color: 'text-violet-300' },
         ].map(stat => (
           <div key={stat.label} className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
@@ -596,6 +746,52 @@ export default function RoutesPage() {
             <div className="text-slate-500 text-xs mt-0.5">{stat.label}</div>
           </div>
         ))}
+      </div>
+
+      {message && (
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-300">
+          {message}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
+          <div className="flex flex-col md:flex-row md:items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Manual jobsite address</label>
+              <input className="input" value={manual.address} onChange={event => setManual(prev => ({ ...prev, address: event.target.value }))} placeholder="123 Jobsite Rd, Orlando, FL" />
+            </div>
+            <div className="md:w-36">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Bin number</label>
+              <input className="input font-mono" value={manual.binNumber} onChange={event => setManual(prev => ({ ...prev, binNumber: event.target.value }))} placeholder="876907" />
+            </div>
+            <div className="md:w-40">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Service</label>
+              <select className="input" value={manual.serviceType} onChange={event => setManual(prev => ({ ...prev, serviceType: event.target.value }))}>
+                <option value="swap">Swap</option>
+                <option value="pickup">Pickup</option>
+                <option value="delivery">Delivery</option>
+                <option value="water_removal">Water removal</option>
+                <option value="emergency">Emergency</option>
+              </select>
+            </div>
+            <div className="md:w-40">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
+              <input type="date" className="input" value={manual.date} onChange={event => setManual(prev => ({ ...prev, date: event.target.value }))} />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-col md:flex-row gap-3">
+            <input className="input flex-1" value={manual.notes} onChange={event => setManual(prev => ({ ...prev, notes: event.target.value }))} placeholder="Gate code, time window, correction note..." />
+            <button onClick={createManualSwap} className="btn-primary px-5 py-2">Add Manual Stop</button>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
+          <h2 className="font-semibold text-white">Dispatch plan</h2>
+          <p className="text-sm text-slate-400 mt-1">Save the optimized routes into driver route tables for today.</p>
+          <button onClick={saveDispatchPlan} disabled={savingPlan || routes.every(route => route.stops.length === 0)} className="btn-secondary w-full mt-4 py-3 disabled:opacity-50">
+            {savingPlan ? 'Saving...' : 'Save Optimized Routes'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
