@@ -9,9 +9,10 @@ function statusClass(status?: string) {
   return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
 }
 
-export default async function CustomerBinsPage({ searchParams }: { searchParams?: { page?: string } }) {
-  const supabase = createClient()
-  const pagination = paginate({ page: searchParams?.page })
+export default async function CustomerBinsPage({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
+  const supabase = await createClient()
+  const resolvedSearchParams = await searchParams
+  const pagination = paginate({ page: resolvedSearchParams?.page })
   const { data: rows, count } = await supabase
     .from('equipment')
     .select('id,bin_number,status,location,last_serviced_at', { count: 'exact' })

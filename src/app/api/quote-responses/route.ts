@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(limited.body, limited.init)
   }
 
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name,company_name,email,phone')

@@ -11,9 +11,10 @@ function statusClass(status?: string) {
   return 'bg-slate-700/40 text-slate-400 border-slate-600/40'
 }
 
-export default async function EquipmentPage({ searchParams }: { searchParams?: { page?: string } }) {
-  const supabase = createClient()
-  const pagination = paginate({ page: searchParams?.page })
+export default async function EquipmentPage({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
+  const supabase = await createClient()
+  const resolvedSearchParams = await searchParams
+  const pagination = paginate({ page: resolvedSearchParams?.page })
   const [rowsResult, totalUnits, deployed, available, inTransit, swapNeeded] = await Promise.all([
     supabase
       .from('equipment')

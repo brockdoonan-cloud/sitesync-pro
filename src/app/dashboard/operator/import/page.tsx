@@ -1,10 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
-import { validateWorkbookFile } from '@/lib/files/workbook'
+import { readWorkbookRows, validateWorkbookFile } from '@/lib/files/workbook'
 
 type ImportRow = {
   id: string
@@ -150,76 +149,63 @@ function isAddressLike(value: string) {
   return /\d+ .+,\s*[A-Z]{2}\s*\d{5}/i.test(value) || /\d+ .+(street|st|road|rd|ave|avenue|blvd|drive|dr|lane|ln)/i.test(value)
 }
 
-function parseWorkbook(file: File): Promise<ImportRow[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Could not read file.'))
-    reader.onload = () => {
-      try {
-        const workbook = XLSX.read(reader.result, { type: 'array' })
-        const parsed: ImportRow[] = []
-        const addressByProject = new Map<string, string>()
+async function parseWorkbook(file: File): Promise<ImportRow[]> {
+  const workbook = await readWorkbookRows(file)
+  const parsed: ImportRow[] = []
+  const addressByProject = new Map<string, string>()
 
-        workbook.SheetNames.forEach(sheetName => {
-          const sheet = workbook.Sheets[sheetName]
-          const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
-          const headerIndex = rows.findIndex(row => row.map(normalizeHeader).includes('bin'))
-          if (headerIndex === -1) return
+  workbook.sheets.forEach(({ sheetName, rows }) => {
+    const headerIndex = rows.findIndex(row => row.map(normalizeHeader).includes('bin'))
+    if (headerIndex === -1) return
 
-          const headers = rows[headerIndex].map(normalizeHeader)
-          const headerMap = headers.reduce<Record<string, number>>((map, header, index) => {
-            if (header) map[header] = index
-            return map
-          }, {})
+    const headers = rows[headerIndex].map(normalizeHeader)
+    const headerMap = headers.reduce<Record<string, number>>((map, header, index) => {
+      if (header) map[header] = index
+      return map
+    }, {})
 
-          const binIndex = headerMap.bin
-          const accountIndex = headerMap.accountname ?? headerMap.customername
-          const projectIndex = headerMap.projectname ?? headerMap.projectnameaddress
-          const addressIndex = headerMap.address ?? headerMap.jobsiteaddress ?? headerMap.serviceaddress ?? headerMap.projectaddress ?? headerMap.location
-          if (binIndex === undefined || accountIndex === undefined || projectIndex === undefined) return
+    const binIndex = headerMap.bin
+    const accountIndex = headerMap.accountname ?? headerMap.customername
+    const projectIndex = headerMap.projectname ?? headerMap.projectnameaddress
+    const addressIndex = headerMap.address ?? headerMap.jobsiteaddress ?? headerMap.serviceaddress ?? headerMap.projectaddress ?? headerMap.location
+    if (binIndex === undefined || accountIndex === undefined || projectIndex === undefined) return
 
-          rows.slice(headerIndex + 1).forEach((values, index) => {
-            const binNumber = clean(values[binIndex])
-            const accountName = clean(values[accountIndex])
-            const projectName = clean(values[projectIndex])
-            if (!binNumber || !accountName || !projectName) return
+    rows.slice(headerIndex + 1).forEach((values, index) => {
+      const binNumber = clean(values[binIndex])
+      const accountName = clean(values[accountIndex])
+      const projectName = clean(values[projectIndex])
+      if (!binNumber || !accountName || !projectName) return
 
-            const row: Record<string, unknown> = Object.fromEntries(headers.map((header, idx) => [header, values[idx]]))
-            const operation = detectOperation(row)
-            const explicitAddress = addressIndex !== undefined ? clean(values[addressIndex]) : ''
-            const projectAddress = isAddressLike(explicitAddress) ? explicitAddress : isAddressLike(projectName) ? projectName : ''
-            const projectKey = `${accountName}|${projectName}`.toLowerCase()
-            if (projectAddress) addressByProject.set(projectKey, projectAddress)
-            if (!addressByProject.has(projectKey)) addressByProject.set(projectKey, deterministicAddress(accountName, projectName, binNumber))
-            const address = addressByProject.get(projectKey) || projectAddress
-            const coords = FLORIDA_DEMO_COORDS[address]
-            const reportDate = sheetReportDate(file.name, sheetName)
+      const row: Record<string, unknown> = Object.fromEntries(headers.map((header, idx) => [header, values[idx]]))
+      const operation = detectOperation(row)
+      const explicitAddress = addressIndex !== undefined ? clean(values[addressIndex]) : ''
+      const projectAddress = isAddressLike(explicitAddress) ? explicitAddress : isAddressLike(projectName) ? projectName : ''
+      const projectKey = `${accountName}|${projectName}`.toLowerCase()
+      if (projectAddress) addressByProject.set(projectKey, projectAddress)
+      if (!addressByProject.has(projectKey)) addressByProject.set(projectKey, deterministicAddress(accountName, projectName, binNumber))
+      const address = addressByProject.get(projectKey) || projectAddress
+      const coords = FLORIDA_DEMO_COORDS[address]
+      const reportDate = sheetReportDate(file.name, sheetName)
 
-            parsed.push({
-              id: `${sheetName}-${index}-${binNumber}`,
-              sheet: sheetName,
-              binNumber,
-              accountName,
-              projectName,
-              address,
-              reportDate,
-              lat: coords?.lat,
-              lng: coords?.lng,
-              operation,
-              status: statusForOperation(operation),
-              binType: equipmentType(clean(row.bintype)),
-              comments: clean(row.comments),
-            })
-          })
-        })
-
-        resolve(parsed)
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error('Could not parse workbook.'))
-      }
-    }
-    reader.readAsArrayBuffer(file)
+      parsed.push({
+        id: `${sheetName}-${index}-${binNumber}`,
+        sheet: sheetName,
+        binNumber,
+        accountName,
+        projectName,
+        address,
+        reportDate,
+        lat: coords?.lat,
+        lng: coords?.lng,
+        operation,
+        status: statusForOperation(operation),
+        binType: equipmentType(clean(row.bintype)),
+        comments: clean(row.comments),
+      })
+    })
   })
+
+  return parsed
 }
 
 function uniqueBy<T>(rows: T[], key: (row: T) => string) {
@@ -496,7 +482,7 @@ export default function BulkImportPage() {
         onDrop={event => { event.preventDefault(); handleFile(event.dataTransfer.files[0]) }}
         className="block rounded-2xl border border-dashed border-sky-500/40 bg-sky-500/10 px-6 py-10 text-center cursor-pointer hover:border-sky-400 transition-colors"
       >
-        <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={event => handleFile(event.target.files?.[0])} />
+        <input type="file" accept=".xlsx,.csv" className="hidden" onChange={event => handleFile(event.target.files?.[0])} />
         <div className="text-lg font-semibold text-white">Drop an Excel report here</div>
         <div className="text-sm text-slate-400 mt-2">Supports files like 4.14.2026 Orlando Report.xlsx. Missing addresses get demo Florida jobsites automatically.</div>
         <div className="text-xs text-slate-500 mt-2">If imports show schema or profiles recursion warnings, run supabase/repair_import_schema.sql once in Supabase SQL Editor.</div>

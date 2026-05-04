@@ -6,10 +6,11 @@ import { getClientIp } from '@/lib/request'
 import { isQuoteTokenExpired } from '@/lib/quotes/token'
 import { captureAppException } from '@/lib/monitoring/sentry'
 
-type Params = { params: { token: string } }
+type Params = { params: Promise<{ token: string }> }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function GET(_request: NextRequest, { params }: Params) {
+  const { token } = await params
   const ip = getClientIp(_request)
   const rate = await checkRateLimit({
     key: `quote-token:${ip}`,
@@ -22,14 +23,14 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return NextResponse.json(limited.body, limited.init)
   }
 
-  if (!uuidPattern.test(params.token)) {
+  if (!uuidPattern.test(token)) {
     return NextResponse.json({ error: 'This quote link is invalid or expired.' }, { status: 404 })
   }
 
   const admin = createAdminClient()
   if (!admin) {
-    const supabase = createClient()
-    const { data, error } = await supabase.rpc('get_quote_marketplace_by_token', { p_token: params.token })
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('get_quote_marketplace_by_token', { p_token: token })
 
     if (error) {
       captureAppException(error, { route: '/api/quote-requests/by-token/[token]' })
@@ -50,7 +51,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const { data: quoteRequest, error } = await admin
     .from('quote_requests')
     .select('*')
-    .eq('access_token', params.token)
+    .eq('access_token', token)
     .single()
 
   if (error || !quoteRequest) {

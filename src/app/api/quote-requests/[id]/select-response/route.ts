@@ -6,24 +6,25 @@ import { logAuditEvent } from '@/lib/audit/log'
 import { isQuoteTokenExpired } from '@/lib/quotes/token'
 import { captureAppException } from '@/lib/monitoring/sentry'
 
-type Params = { params: { id: string } }
+type Params = { params: Promise<{ id: string }> }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function POST(request: NextRequest, { params }: Params) {
+  const { id } = await params
   const body = await request.json().catch(() => null)
   if (!body?.token || !body?.response_id) {
     return NextResponse.json({ error: 'token and response_id are required' }, { status: 400 })
   }
 
-  if (!uuidPattern.test(params.id) || !uuidPattern.test(body.token) || !uuidPattern.test(body.response_id)) {
+  if (!uuidPattern.test(id) || !uuidPattern.test(body.token) || !uuidPattern.test(body.response_id)) {
     return NextResponse.json({ error: 'This quote link is invalid or expired.' }, { status: 404 })
   }
 
   const admin = createAdminClient()
   if (!admin) {
-    const supabase = createClient()
+    const supabase = await createClient()
     const { data, error } = await supabase.rpc('select_quote_response_by_token', {
-      p_quote_request_id: params.id,
+      p_quote_request_id: id,
       p_token: body.token,
       p_response_id: body.response_id,
     })
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const { data: quoteRequest, error: quoteError } = await admin
     .from('quote_requests')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('access_token', body.token)
     .single()
 
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     .from('quote_responses')
     .select('*')
     .eq('id', body.response_id)
-    .eq('quote_request_id', params.id)
+    .eq('quote_request_id', id)
     .single()
 
   if (selectedError || !selected) {
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const { error: declineError } = await admin
     .from('quote_responses')
     .update({ status: 'declined' })
-    .eq('quote_request_id', params.id)
+    .eq('quote_request_id', id)
     .neq('id', body.response_id)
 
   if (declineError) return NextResponse.json({ error: declineError.message }, { status: 500 })
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: selectError.message }, { status: 500 })
   }
 
-  await admin.from('quote_requests').update({ status: 'won' }).eq('id', params.id)
+  await admin.from('quote_requests').update({ status: 'won' }).eq('id', id)
   await notifySelectedOperator(quoteRequest, updatedSelected, admin)
   await logAuditEvent({
     action: 'select_quote',

@@ -22,7 +22,7 @@ const ROLE_PRIORITY: Record<OrgRole, number> = {
 }
 
 export async function getCurrentOrg(): Promise<CurrentOrg | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 

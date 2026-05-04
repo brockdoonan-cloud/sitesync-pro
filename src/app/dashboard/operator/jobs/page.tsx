@@ -135,9 +135,10 @@ function JobCard({ job }: { job: JobRow }) {
   )
 }
 
-export default async function OperatorJobsPage({ searchParams }: { searchParams?: { page?: string } }) {
-  const supabase = createClient()
-  const pagination = paginate({ page: searchParams?.page })
+export default async function OperatorJobsPage({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
+  const supabase = await createClient()
+  const resolvedSearchParams = await searchParams
+  const pagination = paginate({ page: resolvedSearchParams?.page })
   const { data: jobs, count } = await supabase
     .from('jobs')
     .select('*,service_requests(service_type,jobsite_address,profiles(full_name,company_name))', { count: 'exact' })

@@ -16,7 +16,7 @@ export async function GET() {
   }
 
   const admin = createAdminClient()
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const [database, auth] = await Promise.all([
     admin

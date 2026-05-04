@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient()
-  const supabase = admin || createClient()
+  const supabase = admin || (await createClient())
 
   const query = supabase.from('quote_requests').insert(payload)
   const result = admin

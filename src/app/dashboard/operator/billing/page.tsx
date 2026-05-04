@@ -1,11 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type ServiceCode } from '@/lib/pricing'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
-import { validateWorkbookFile } from '@/lib/files/workbook'
+import { readWorkbookRows, type ParsedWorkbook, validateWorkbookFile } from '@/lib/files/workbook'
 
 type InvoiceRow = {
   id: string
@@ -277,12 +276,11 @@ function demoInvoiceRows(events: OperationEvent[]): InvoiceRow[] {
   })
 }
 
-function workbookKind(workbook: XLSX.WorkBook) {
+function workbookKind(workbook: ParsedWorkbook) {
   let hasBillingHeaders = false
   let hasOperationalHeaders = false
 
-  workbook.SheetNames.forEach(sheetName => {
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], { header: 1, defval: '' })
+  workbook.sheets.forEach(({ rows }) => {
     rows.slice(0, 20).forEach(row => {
       const headers = row.map(headerKey)
       if (headers.includes('type') && headers.includes('amount')) hasBillingHeaders = true
@@ -308,84 +306,72 @@ function hashOperation(event: OperationEvent) {
   return `OPS-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}`
 }
 
-function parseBillingWorkbook(file: File): Promise<BillingBatch> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Could not read billing file.'))
-    reader.onload = () => {
-      try {
-        const workbook = XLSX.read(reader.result, { type: 'array', cellDates: true })
-        const kind = workbookKind(workbook)
-        if (kind === 'operations') {
-          throw new Error('This is an Orlando operations report, not a billing export. Use Operator > Bulk Import for bins/jobsites/service activity. Billing accepts the Atlantic Concrete invoice export with Type and Amount columns.')
-        }
-        const sheet = workbook.Sheets[workbook.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
-        const headerIndex = rows.findIndex(row => row.some(value => headerKey(value) === 'type') && row.some(value => headerKey(value) === 'amount'))
-        if (headerIndex === -1) throw new Error('Could not find Type/Amount billing headers. Drop the Atlantic billing export here, or use Operator > Bulk Import for Orlando operations reports.')
+async function parseBillingWorkbook(file: File): Promise<BillingBatch> {
+  const workbook = await readWorkbookRows(file)
+  const kind = workbookKind(workbook)
+  if (kind === 'operations') {
+    throw new Error('This is an Orlando operations report, not a billing export. Use Operator > Bulk Import for bins/jobsites/service activity. Billing accepts the Atlantic Concrete invoice export with Type and Amount columns.')
+  }
+  const rows = workbook.sheets[0]?.rows || []
+  const headerIndex = rows.findIndex(row => row.some(value => headerKey(value) === 'type') && row.some(value => headerKey(value) === 'amount'))
+  if (headerIndex === -1) throw new Error('Could not find Type/Amount billing headers. Drop the Atlantic billing export here, or use Operator > Bulk Import for Orlando operations reports.')
 
-        const headers = rows[headerIndex].map(clean)
-        const indexFor = (name: string) => headers.findIndex(header => header.toLowerCase() === name.toLowerCase())
-        const idx = {
-          type: indexFor('Type'),
-          date: indexFor('Date'),
-          num: indexFor('Num'),
-          memo: indexFor('Memo'),
-          item: indexFor('Item'),
-          rep: indexFor('Rep'),
-          qty: indexFor('Qty'),
-          rate: indexFor('Sales Price'),
-          amount: indexFor('Amount'),
-          balance: indexFor('Balance'),
-        }
+  const headers = rows[headerIndex].map(clean)
+  const indexFor = (name: string) => headers.findIndex(header => header.toLowerCase() === name.toLowerCase())
+  const idx = {
+    type: indexFor('Type'),
+    date: indexFor('Date'),
+    num: indexFor('Num'),
+    memo: indexFor('Memo'),
+    item: indexFor('Item'),
+    rep: indexFor('Rep'),
+    qty: indexFor('Qty'),
+    rate: indexFor('Sales Price'),
+    amount: indexFor('Amount'),
+    balance: indexFor('Balance'),
+  }
 
-        let currentClient = ''
-        let currentProject = ''
-        const lines: BillingLine[] = []
+  let currentClient = ''
+  let currentProject = ''
+  const lines: BillingLine[] = []
 
-        rows.slice(headerIndex + 1).forEach((row, offset) => {
-          const rowNumber = headerIndex + offset + 2
-          const first = clean(row[1])
-          const project = clean(row[2])
-          const type = clean(row[idx.type])
+  rows.slice(headerIndex + 1).forEach((row, offset) => {
+    const rowNumber = headerIndex + offset + 2
+    const first = clean(row[1])
+    const project = clean(row[2])
+    const type = clean(row[idx.type])
 
-          if (first && !type && !first.toLowerCase().startsWith('total')) currentClient = first
-          if (project && !type && !project.toLowerCase().startsWith('total')) currentProject = project
-          if (!type || type.toLowerCase().startsWith('total')) return
+    if (first && !type && !first.toLowerCase().startsWith('total')) currentClient = first
+    if (project && !type && !project.toLowerCase().startsWith('total')) currentProject = project
+    if (!type || type.toLowerCase().startsWith('total')) return
 
-          const line: BillingLine = {
-            id: `${rowNumber}-${clean(row[idx.num])}-${clean(row[idx.memo])}-${clean(row[idx.item])}`,
-            clientName: currentClient || 'Unknown client',
-            projectName: currentProject || 'Unknown project',
-            type,
-            date: excelDate(row[idx.date]),
-            invoiceNumber: clean(row[idx.num]) || `ROW-${rowNumber}`,
-            memo: clean(row[idx.memo]),
-            item: clean(row[idx.item]),
-            rep: clean(row[idx.rep]),
-            qty: numberValue(row[idx.qty]),
-            rate: numberValue(row[idx.rate]),
-            amount: numberValue(row[idx.amount]),
-            balance: numberValue(row[idx.balance]),
-            sourceRow: rowNumber,
-            raw: Object.fromEntries(headers.map((header, index) => [header || `Column ${index + 1}`, row[index]])),
-          }
-          lines.push(line)
-        })
-
-        resolve({
-          fileName: file.name,
-          importedAt: new Date().toISOString(),
-          lines,
-          totalAmount: lines.reduce((sum, line) => sum + line.amount, 0),
-          endingBalance: lines.at(-1)?.balance || 0,
-        })
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error('Could not parse billing workbook.'))
-      }
+    const line: BillingLine = {
+      id: `${rowNumber}-${clean(row[idx.num])}-${clean(row[idx.memo])}-${clean(row[idx.item])}`,
+      clientName: currentClient || 'Unknown client',
+      projectName: currentProject || 'Unknown project',
+      type,
+      date: excelDate(row[idx.date]),
+      invoiceNumber: clean(row[idx.num]) || `ROW-${rowNumber}`,
+      memo: clean(row[idx.memo]),
+      item: clean(row[idx.item]),
+      rep: clean(row[idx.rep]),
+      qty: numberValue(row[idx.qty]),
+      rate: numberValue(row[idx.rate]),
+      amount: numberValue(row[idx.amount]),
+      balance: numberValue(row[idx.balance]),
+      sourceRow: rowNumber,
+      raw: Object.fromEntries(headers.map((header, index) => [header || `Column ${index + 1}`, row[index]])),
     }
-    reader.readAsArrayBuffer(file)
+    lines.push(line)
   })
+
+  return {
+    fileName: file.name,
+    importedAt: new Date().toISOString(),
+    lines,
+    totalAmount: lines.reduce((sum, line) => sum + line.amount, 0),
+    endingBalance: lines.at(-1)?.balance || 0,
+  }
 }
 
 function csvEscape(value: unknown) {
@@ -785,7 +771,7 @@ export default function BillingPage() {
         onDrop={event => { event.preventDefault(); handleFile(event.dataTransfer.files[0]) }}
         className="block rounded-2xl border border-dashed border-sky-500/40 bg-sky-500/10 px-6 py-8 text-center cursor-pointer hover:border-sky-400 transition-colors"
       >
-        <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={event => handleFile(event.target.files?.[0])} />
+        <input type="file" accept=".xlsx,.csv" className="hidden" onChange={event => handleFile(event.target.files?.[0])} />
         <div className="text-lg font-semibold text-white">Drop billing export here</div>
         <div className="text-sm text-slate-400 mt-2">Supports reports like Report_from_Atlantic_Concrete_Washout,_Inc.xlsx with Type, Date, Num, Memo, Item, Qty, Sales Price, Amount, and Balance columns.</div>
       </label>

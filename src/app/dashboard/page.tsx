@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   if (org?.isOperator) redirect('/dashboard/operator')
   if (org?.isClient) redirect('/dashboard/customer')
 
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/auth/login')

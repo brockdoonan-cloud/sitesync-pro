@@ -4,7 +4,7 @@ import NavBar from '@/components/NavBar'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 

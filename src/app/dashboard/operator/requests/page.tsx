@@ -3,9 +3,10 @@ import UpdateRequestStatus from '@/components/UpdateRequestStatus'
 import PaginationControls from '@/components/PaginationControls'
 import { paginate } from '@/lib/pagination'
 
-export default async function OperatorRequestsPage({ searchParams }: { searchParams?: { page?: string } }) {
-  const supabase = createClient()
-  const pagination = paginate({ page: searchParams?.page })
+export default async function OperatorRequestsPage({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
+  const supabase = await createClient()
+  const resolvedSearchParams = await searchParams
+  const pagination = paginate({ page: resolvedSearchParams?.page })
 
   const { data: requests, count } = await supabase
     .from('service_requests')

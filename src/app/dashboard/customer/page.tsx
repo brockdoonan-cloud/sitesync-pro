@@ -6,7 +6,7 @@ function titleize(value?: string) {
 }
 
 export default async function CustomerDashboard() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('full_name,company_name').eq('id', user!.id).single()
   const [{ data: requests }, { count: binCount }, { count: activeCount }] = await Promise.all([

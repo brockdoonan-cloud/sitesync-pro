@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function OperatorDashboard() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const [jobs, deployed, available, leads, clients] = await Promise.all([
     supabase.from('jobs').select('id', { count: 'exact', head: true }),
     supabase.from('equipment').select('id', { count: 'exact', head: true }).eq('status', 'deployed'),
