@@ -560,7 +560,13 @@ function applyDomLanguage(language: Language) {
 
   let node = walker.nextNode() as TranslatableText | null
   while (node) {
-    if (!node.__sitesyncOriginal) node.__sitesyncOriginal = node.textContent || ''
+    const currentValue = node.textContent || ''
+    if (!node.__sitesyncOriginal) {
+      node.__sitesyncOriginal = currentValue
+    } else {
+      const translatedOriginal = translatePhrase(node.__sitesyncOriginal, language)
+      if (currentValue !== translatedOriginal) node.__sitesyncOriginal = currentValue
+    }
     const nextValue = translatePhrase(node.__sitesyncOriginal, language)
     if (node.textContent !== nextValue) node.textContent = nextValue
     node = walker.nextNode() as TranslatableText | null
@@ -572,7 +578,12 @@ function applyDomLanguage(language: Language) {
     attrs.forEach(attr => {
       const value = element.getAttribute(attr)
       if (!value) return
-      element.__sitesyncOriginalAttrs![attr] ||= value
+      if (!element.__sitesyncOriginalAttrs![attr]) {
+        element.__sitesyncOriginalAttrs![attr] = value
+      } else {
+        const translatedOriginal = translatePhrase(element.__sitesyncOriginalAttrs![attr], language)
+        if (value !== translatedOriginal) element.__sitesyncOriginalAttrs![attr] = value
+      }
       const nextValue = translatePhrase(element.__sitesyncOriginalAttrs![attr], language)
       if (value !== nextValue) element.setAttribute(attr, nextValue)
     })
