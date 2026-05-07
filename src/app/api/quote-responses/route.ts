@@ -42,10 +42,23 @@ export async function POST(request: NextRequest) {
   const company = profile?.company_name || org.organizationName || 'SiteSync Operator'
   const operatorName = profile?.full_name || org.user.email || company
   const operatorEmail = profile?.email || org.user.email || null
+  let divisionId = body.division_id ? String(body.division_id) : null
+
+  if (!divisionId) {
+    const { data: match } = await supabase
+      .from('lead_division_matches')
+      .select('division_id')
+      .eq('quote_request_id', body.quote_request_id)
+      .eq('organization_id', org.organizationId)
+      .limit(1)
+      .maybeSingle()
+    divisionId = match?.division_id || null
+  }
 
   const payload = {
     quote_request_id: body.quote_request_id,
     organization_id: org.organizationId,
+    ...(divisionId ? { division_id: divisionId } : {}),
     operator_user_id: org.user.id,
     operator_name: operatorName,
     operator_company: company,
@@ -64,11 +77,22 @@ export async function POST(request: NextRequest) {
     .eq('organization_id', org.organizationId)
     .maybeSingle()
 
-  const { data: response, error } = await supabase
+  let { data: response, error } = await supabase
     .from('quote_responses')
     .upsert(payload, { onConflict: 'quote_request_id,organization_id' })
     .select('*')
     .single()
+
+  if (error && divisionId && /division_id/i.test(error.message || '')) {
+    const { division_id: _divisionId, ...payloadWithoutDivision } = payload as any
+    const { data: retryResponse, error: retryError } = await supabase
+      .from('quote_responses')
+      .upsert(payloadWithoutDivision, { onConflict: 'quote_request_id,organization_id' })
+      .select('*')
+      .single()
+    response = retryResponse
+    error = retryError
+  }
 
   if (error) {
     captureAppException(error, { route: '/api/quote-responses', organizationId: org.organizationId, role: org.role, userId: org.user.id })

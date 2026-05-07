@@ -27,6 +27,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/operator/onboarding', label: t('setup') },
     { href: '/dashboard/operator/import', label: t('import') },
     { href: '/dashboard/operator/leads', label: t('leads') },
+    { href: '/dashboard/operator/coverage', label: 'Coverage' },
     { href: '/dashboard/operator/requests', label: t('requests') },
     { href: '/dashboard/operator/jobs', label: t('jobs') },
     { href: '/dashboard/operator/routes', label: t('routes') },

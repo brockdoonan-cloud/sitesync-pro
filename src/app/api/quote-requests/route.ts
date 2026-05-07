@@ -6,6 +6,7 @@ import { logAuditEvent } from '@/lib/audit/log'
 import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 import { getClientIp } from '@/lib/request'
 import { captureAppException } from '@/lib/monitoring/sentry'
+import { findMatchingDivisions, insertLeadDivisionMatches } from '@/lib/matching/findMatchingDivisions'
 
 const requiredFields = ['name', 'email', 'city', 'zip', 'equipment_type', 'job_type']
 
@@ -56,10 +57,25 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient()
   const supabase = admin || (await createClient())
 
-  const query = supabase.from('quote_requests').insert(payload)
-  const result = admin
-    ? await query.select('*').single()
-    : await query.then((value: any) => ({ ...value, data: { ...payload, id: null, created_at: new Date().toISOString() } }))
+  let result: any
+  if (admin) {
+    result = await admin.from('quote_requests').insert(payload).select('*').single()
+    if (!result.error) {
+      const matches = await findMatchingDivisions(admin, { zip: payload.zip })
+      await insertLeadDivisionMatches(admin, result.data?.id, matches)
+    }
+  } else {
+    result = await (supabase as any).rpc('create_quote_request_with_matches', { p_payload: payload })
+    if (result.error) {
+      const fallback = await supabase.from('quote_requests').insert(payload)
+      result = {
+        ...fallback,
+        data: fallback.error
+          ? null
+          : { ...payload, id: null, created_at: new Date().toISOString() },
+      }
+    }
+  }
 
   if (result.error) {
     captureAppException(result.error, { route: '/api/quote-requests' })

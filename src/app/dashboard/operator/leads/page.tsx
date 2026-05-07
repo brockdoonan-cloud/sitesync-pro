@@ -39,18 +39,66 @@ export default function LeadsPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    let q = supabase
+    let matchedLeadIds: string[] | null = null
+    let scopedByCoverage = false
+    const { data: auth } = await supabase.auth.getUser()
+
+    if (auth.user) {
+      const { data: memberships, error: membershipError } = await supabase
+        .from('organization_members')
+        .select('organization_id,role')
+        .eq('user_id', auth.user.id)
+
+      if (!membershipError && memberships?.length) {
+        const isSuperAdmin = memberships.some((membership: any) => membership.role === 'super_admin')
+        const organizationIds = memberships
+          .filter((membership: any) => ['operator_admin', 'operator_member', 'super_admin'].includes(membership.role))
+          .map((membership: any) => membership.organization_id)
+
+        if (!isSuperAdmin && organizationIds.length) {
+          const { data: matches, error: matchError } = await supabase
+            .from('lead_division_matches')
+            .select('quote_request_id')
+            .in('organization_id', organizationIds)
+
+          if (!matchError) {
+            scopedByCoverage = true
+            matchedLeadIds = [
+              ...new Set<string>(
+                (matches || [])
+                  .map((match: any) => String(match.quote_request_id || ''))
+                  .filter(Boolean)
+              ),
+            ]
+          }
+        }
+      }
+    }
+
+    if (scopedByCoverage && matchedLeadIds?.length === 0) {
+      setLeads([])
+      setTotal(0)
+      setStatusCounts({ open: 0, contacted: 0, quoted: 0, won: 0 })
+      setLoading(false)
+      return
+    }
+
+    const applyCoverageScope = (query: any) => {
+      return scopedByCoverage && matchedLeadIds ? query.in('id', matchedLeadIds) : query
+    }
+
+    let q = applyCoverageScope(supabase
       .from('quote_requests')
       .select('*', { count: 'exact' })
       .order('created_at',{ascending:false})
-      .range(pagination.from, pagination.to)
+      .range(pagination.from, pagination.to))
     if (filter !== 'all') q = q.eq('status', filter)
     const [leadResult, open, contacted, quoted, won] = await Promise.all([
       q,
-      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'contacted'),
-      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'quoted'),
-      supabase.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'won'),
+      applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'open'),
+      applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'contacted'),
+      applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'quoted'),
+      applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'won'),
     ])
     setLeads(leadResult.data || [])
     setTotal(leadResult.count || 0)

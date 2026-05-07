@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "node node_modules/eslint/bin/eslint.js src --ext .ts,.tsx"
+    "lint": "node node_modules/eslint/bin/eslint.js src --ext .ts,.tsx",
+    "seed:zip-lookup": "node scripts/seed_zip_lookup.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.51.0",
