@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     preferred_date: preferredDate || null,
     scheduled_date: preferredDate || null,
     bin_number: binNumber || null,
-    priority: serviceType === 'emergency' ? 'urgent' : serviceType === 'swap' ? 'high' : 'normal',
+    priority: serviceType === 'emergency' ? 'emergency' : serviceType === 'swap' ? 'high' : 'normal',
     notes,
     status: 'dispatch_ready',
   }

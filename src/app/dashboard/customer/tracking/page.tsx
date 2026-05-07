@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/i18n'
-import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 type ServiceRequest = {
   id: string
@@ -18,6 +17,29 @@ type ServiceRequest = {
   jobsite_address?: string | null
   service_type?: string | null
   preferred_date?: string | null
+  eta_at?: string | null
+  route_stop?: {
+    id: string
+    status?: string | null
+    eta?: string | null
+    eta_minutes?: number | null
+    address?: string | null
+    stop_order?: number | null
+  } | null
+  driver_route?: {
+    id: string
+    truck_number?: string | null
+    driver_name?: string | null
+    status?: string | null
+    opened_at?: string | null
+    last_eta_at?: string | null
+  } | null
+  truck_location?: {
+    lat: number
+    lng: number
+    status?: string | null
+    recorded_at?: string | null
+  } | null
 }
 
 const activeStatuses = ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'in_progress', 'completed']
@@ -26,6 +48,7 @@ function normalizeStatus(status?: string | null) {
   if (status === 'dispatch_ready') return 'pending'
   if (status === 'confirmed') return 'scheduled'
   if (status === 'dispatched' || status === 'in_progress') return 'en_route'
+  if (status === 'arrived') return 'en_route'
   return status || 'pending'
 }
 
@@ -49,6 +72,19 @@ function requestDate(request: ServiceRequest, fallback: string) {
 
 function mapUrl(address: string) {
   return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`
+}
+
+function trackerMapUrl(request: ServiceRequest, address: string) {
+  if (request.truck_location?.lat && request.truck_location?.lng) {
+    return `https://www.google.com/maps?q=${request.truck_location.lat},${request.truck_location.lng}&output=embed`
+  }
+  return mapUrl(address)
+}
+
+function etaText(request?: ServiceRequest | null) {
+  const eta = request?.route_stop?.eta || request?.eta_at || request?.driver_route?.last_eta_at
+  if (!eta) return 'ETA pending'
+  return new Date(eta).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
 function ProgressTracker({ status, steps }: { status: string; steps: { key: string; label: string }[] }) {
@@ -82,25 +118,11 @@ export default function TrackingPage() {
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      setError(t('signInTracking'))
-      setLoading(false)
-      return
-    }
-
     try {
-      const rows = await fetchAllRows<ServiceRequest>((from, to) =>
-        supabase
-          .from('service_requests')
-          .select('*')
-          .eq('customer_id', user.id)
-          .in('status', activeStatuses)
-          .order('created_at', { ascending: false })
-          .range(from, to)
-      )
+      const response = await fetch('/api/customer/tracking', { cache: 'no-store' })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || t('signInTracking'))
+      const rows = (payload.requests || []) as ServiceRequest[]
       setRequests(rows)
       setSelectedId(current => current && rows.some(row => row.id === current) ? current : rows[0]?.id ?? null)
     } catch (err) {
@@ -117,9 +139,13 @@ export default function TrackingPage() {
     loadRequests().then(() => {
       if (!isMounted) return
     })
+    const timer = window.setInterval(() => {
+      if (isMounted) loadRequests()
+    }, 20000)
 
     return () => {
       isMounted = false
+      window.clearInterval(timer)
     }
   }, [loadRequests])
 
@@ -219,6 +245,9 @@ export default function TrackingPage() {
 
                   <div className="mt-4 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
                     <div>{t('scheduledLabel')}: <span className="text-slate-200">{requestDate(request, t('datePending'))}</span></div>
+                    <div>ETA: <span className="text-sky-200">{etaText(request)}</span></div>
+                    {request.driver_route?.truck_number && <div>Truck: <span className="text-slate-200">#{request.driver_route.truck_number}</span></div>}
+                    {request.driver_route?.driver_name && <div>Driver: <span className="text-slate-200">{request.driver_route.driver_name}</span></div>}
                     {request.notes && <div>{t('notesLabel')}: <span className="text-slate-200">{request.notes}</span></div>}
                   </div>
 
@@ -249,12 +278,14 @@ export default function TrackingPage() {
             <div className="overflow-hidden rounded-lg border border-slate-700/50 bg-slate-800/40">
               <div className="border-b border-slate-700/50 px-4 py-3">
                 <h2 className="font-semibold text-white">{t('jobsiteMap')}</h2>
-                <p className="mt-1 text-sm text-slate-400">{selectedAddress || t('selectAddress')}</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {selectedRequest?.truck_location ? `Truck last seen ${etaText(selectedRequest)}` : selectedAddress || t('selectAddress')}
+                </p>
               </div>
               {selectedAddress ? (
                 <iframe
                   title="Assigned jobsite map"
-                  src={mapUrl(selectedAddress)}
+                  src={trackerMapUrl(selectedRequest, selectedAddress)}
                   className="h-80 w-full border-0"
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
@@ -282,6 +313,16 @@ export default function TrackingPage() {
                     <dt className="text-slate-400">{t('date')}</dt>
                     <dd className="font-medium text-white">{requestDate(selectedRequest, t('datePending'))}</dd>
                   </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-slate-400">ETA</dt>
+                    <dd className="font-medium text-white">{etaText(selectedRequest)}</dd>
+                  </div>
+                  {selectedRequest.driver_route?.truck_number && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-slate-400">Truck</dt>
+                      <dd className="font-medium text-white">#{selectedRequest.driver_route.truck_number}</dd>
+                    </div>
+                  )}
                 </dl>
               </div>
             )}

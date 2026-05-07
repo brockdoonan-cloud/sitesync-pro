@@ -65,6 +65,37 @@ type AssignedRoute = {
   swaps: number
 }
 
+type SavedRouteStop = {
+  id: string
+  route_id: string
+  stop_order: number
+  service_request_id?: string | null
+  address?: string | null
+  bin_numbers?: string[] | null
+  stop_type?: string | null
+  status?: string | null
+  eta?: string | null
+  eta_minutes?: number | null
+  arrived_at?: string | null
+  completed_at?: string | null
+  notes?: string | null
+}
+
+type SavedDriverRoute = {
+  id: string
+  route_date?: string | null
+  truck_number?: string | null
+  driver_name?: string | null
+  status?: string | null
+  opened_at?: string | null
+  closed_at?: string | null
+  current_stop_id?: string | null
+  last_eta_at?: string | null
+  estimated_minutes?: number | null
+  total_miles?: number | null
+  route_stops: SavedRouteStop[]
+}
+
 type LatLng = { lat: number; lng: number }
 type GoogleMapsWindow = Window & {
   google?: {
@@ -553,12 +584,23 @@ function statusLabel(status: Truck['status']) {
   return 'Available'
 }
 
+function routeStatusLabel(status?: string | null) {
+  return (status || 'planned').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function etaLabel(value?: string | null) {
+  if (!value) return 'ETA pending'
+  return new Date(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
 export default function RoutesPage() {
   const [sites, setSites] = useState<Stop[]>(DEMO_STOPS)
   const [trucks, setTrucks] = useState<Truck[]>(DEMO_TRUCKS)
   const [loading, setLoading] = useState(true)
   const [savingPlan, setSavingPlan] = useState(false)
+  const [routeActionId, setRouteActionId] = useState('')
   const [message, setMessage] = useState('')
+  const [savedRoutes, setSavedRoutes] = useState<SavedDriverRoute[]>([])
   const [manual, setManual] = useState({
     jobsiteName: '',
     address: '',
@@ -579,7 +621,8 @@ export default function RoutesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     setMessage('')
-    const [jobsites, equipment, truckRows, serviceRequests] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10)
+    const [jobsites, equipment, truckRows, serviceRequests, driverRoutes] = await Promise.all([
       fetchAllRows<Jobsite>((from, to) =>
         supabase.from('jobsites').select('id,name,address,city,state,zip,lat,lng,status').order('status', { ascending: true }).range(from, to)
       ),
@@ -597,7 +640,35 @@ export default function RoutesPage() {
           .order('created_at', { ascending: false })
           .range(from, to)
       ),
+      fetchAllRows<SavedDriverRoute>((from, to) =>
+        supabase
+          .from('driver_routes')
+          .select('id,route_date,truck_number,driver_name,status,opened_at,closed_at,current_stop_id,last_eta_at,estimated_minutes,total_miles')
+          .eq('route_date', today)
+          .in('status', ['planned', 'in_progress', 'ready_to_close'])
+          .order('truck_number', { ascending: true })
+          .range(from, to)
+      ),
     ])
+
+    const routeIds = driverRoutes.map(route => route.id)
+    const routeStops = routeIds.length
+      ? await fetchAllRows<SavedRouteStop>((from, to) =>
+          supabase
+            .from('route_stops')
+            .select('id,route_id,stop_order,service_request_id,address,bin_numbers,stop_type,status,eta,eta_minutes,arrived_at,completed_at,notes')
+            .in('route_id', routeIds)
+            .order('stop_order', { ascending: true })
+            .range(from, to)
+        )
+      : []
+    const stopsByRoute = new Map<string, SavedRouteStop[]>()
+    routeStops.forEach(stop => {
+      const current = stopsByRoute.get(stop.route_id) || []
+      current.push(stop)
+      stopsByRoute.set(stop.route_id, current)
+    })
+    setSavedRoutes(driverRoutes.map(route => ({ ...route, route_stops: stopsByRoute.get(route.id) || [] })))
 
     const equipmentByJobsite = new Map<string, Equipment[]>()
     equipment.forEach(item => {
@@ -746,7 +817,10 @@ export default function RoutesPage() {
           .single()
         if (routeError) throw routeError
 
-        const stopRows = route.stops.map((stop, index) => ({
+        let cumulativeMinutes = 20
+        const stopRows = route.stops.map((stop, index) => {
+          cumulativeMinutes += Math.max(15, Math.round((stop.distanceFromPrevious || 4) * 3.2 + 12))
+          return ({
           route_id: savedRoute.id,
           stop_order: index + 1,
           jobsite_id: stop.request?.jobsite_id || (isUuid(stop.id) ? stop.id : null),
@@ -757,16 +831,26 @@ export default function RoutesPage() {
           bin_numbers: stop.equipment.map(item => item.bin_number).filter(Boolean),
           stop_type: routeStopType(stop),
           status: 'planned',
+          eta: new Date(Date.now() + cumulativeMinutes * 60_000).toISOString(),
+          eta_minutes: cumulativeMinutes,
           notes: stop.request?.notes || `${stop.equipment.length} bins on site`,
-        }))
-        const { error: stopError } = await supabase.from('route_stops').insert(stopRows)
+        })
+        })
+        const { data: savedStops, error: stopError } = await supabase.from('route_stops').insert(stopRows).select('id,service_request_id,eta')
         if (stopError) throw stopError
+        for (const savedStop of savedStops || []) {
+          if (!savedStop.service_request_id) continue
+          await supabase
+            .from('service_requests')
+            .update({ route_stop_id: savedStop.id, eta_at: savedStop.eta, status: 'scheduled' })
+            .eq('id', savedStop.service_request_id)
+        }
         routeCount++
         stopCount += stopRows.length
       }
 
       const requestIds = routes.flatMap(route => route.stops.map(stop => stop.request?.id).filter(Boolean) as string[])
-      if (requestIds.length > 0) await supabase.from('service_requests').update({ status: 'scheduled' }).in('id', requestIds)
+      if (requestIds.length > 0) await supabase.from('service_requests').update({ status: 'scheduled' }).is('route_stop_id', null).in('id', requestIds)
       setMessage(`Saved ${routeCount} driver route(s) and ${stopCount} stop(s).`)
       await load()
     } catch (err) {
@@ -904,6 +988,49 @@ export default function RoutesPage() {
     await load()
   }
 
+  const runRouteAction = async (routeId: string, action: 'open' | 'close') => {
+    setRouteActionId(`${routeId}:${action}`)
+    setMessage('')
+    const response = await fetch(`/api/driver/routes/${routeId}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, eta_minutes: 35 }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) setMessage(payload.error || 'Route action failed.')
+    else setMessage(action === 'open' ? 'Route opened. Customer tracker is now showing en route status and ETA.' : 'Route closed for billing.')
+    setRouteActionId('')
+    await load()
+  }
+
+  const runSavedStopAction = async (stop: SavedRouteStop, action: 'en_route' | 'arrived' | 'complete' | 'cancel') => {
+    setRouteActionId(`${stop.id}:${action}`)
+    setMessage('')
+    const response = await fetch(`/api/driver/stops/${stop.id}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        eta_minutes: stop.eta_minutes || 35,
+        final_location: stop.address,
+        proof_notes: action === 'complete' ? `Completed by driver from route board at ${new Date().toLocaleString()}` : undefined,
+      }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) setMessage(payload.error || 'Stop action failed.')
+    else {
+      const messages = {
+        en_route: `Stop is en route. Client ETA is ${etaLabel(payload.stop?.eta || stop.eta)}.`,
+        arrived: 'Driver marked arrived at the jobsite.',
+        complete: 'Stop completed, bin status updated, billing event created, and customer request closed.',
+        cancel: 'Stop cancelled.',
+      }
+      setMessage(messages[action])
+    }
+    setRouteActionId('')
+    await load()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
@@ -952,6 +1079,75 @@ export default function RoutesPage() {
           {message}
         </div>
       )}
+
+      <div className="card">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold text-white">Driver route board</h2>
+            <p className="mt-1 text-sm text-slate-400">Drivers can open routes, send ETAs, mark arrival, complete stops, and close routes for billing.</p>
+          </div>
+          <button onClick={load} className="btn-secondary px-4 py-2 text-sm">Refresh Live Routes</button>
+        </div>
+        {savedRoutes.length ? (
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            {savedRoutes.map(route => {
+              const openStops = route.route_stops.filter(stop => !['completed', 'cancelled'].includes((stop.status || '').toLowerCase()))
+              return (
+                <div key={route.id} className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Truck {route.truck_number || '-'} · {route.driver_name || 'Driver'}</div>
+                      <div className="mt-1 text-xs text-slate-500">{routeStatusLabel(route.status)} · {openStops.length} open stop(s) · ETA {etaLabel(route.last_eta_at || route.route_stops[0]?.eta)}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => runRouteAction(route.id, 'open')}
+                        disabled={routeActionId === `${route.id}:open` || route.status === 'in_progress'}
+                        className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-50"
+                      >
+                        {route.opened_at ? 'Reopen' : 'Open'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => runRouteAction(route.id, 'close')}
+                        disabled={routeActionId === `${route.id}:close` || openStops.length > 0}
+                        className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-300 hover:bg-green-500/20 disabled:opacity-50"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {route.route_stops.map(stop => (
+                      <div key={stop.id} className="rounded-lg border border-slate-700/40 bg-slate-800/40 px-3 py-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-white">#{stop.stop_order} {stop.address || 'Route stop'}</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {routeStatusLabel(stop.status)} · ETA {etaLabel(stop.eta)} · {(stop.bin_numbers || []).join(', ') || 'No bin attached'}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button onClick={() => runSavedStopAction(stop, 'en_route')} className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200">On way</button>
+                            <button onClick={() => runSavedStopAction(stop, 'arrived')} className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Arrived</button>
+                            <button onClick={() => runSavedStopAction(stop, 'complete')} className="rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-300">Complete</button>
+                            <button onClick={() => runSavedStopAction(stop, 'cancel')} className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300">Cancel</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-slate-700/50 bg-slate-800/40 px-4 py-8 text-center text-sm text-slate-400">
+            Save an optimized route plan to create driver-openable routes with customer ETAs.
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2 rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
