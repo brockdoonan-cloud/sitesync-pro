@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import PaginationControls from '@/components/PaginationControls'
 import { paginate } from '@/lib/pagination'
 import CustomerBinsList, { type CustomerBinItem } from '@/components/customer/CustomerBinsList'
+import { DEMO_CUSTOMER_BINS } from '@/lib/demo/customerPortal'
 
 type ClientRow = {
   id: string
@@ -69,7 +70,7 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
     : { data: [] }
   const activeSwapBins = new Set((activeRequests || []).map((request: any) => request.bin_number).filter(Boolean))
 
-  const items: CustomerBinItem[] = (rows || []).map((item: any) => {
+  let items: CustomerBinItem[] = (rows || []).map((item: any) => {
     const jobsiteId = item.jobsite_id || item.current_jobsite_id
     const binNumber = binNumberFor(item)
     return {
@@ -79,7 +80,29 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
       active_swap_requested: activeSwapBins.has(binNumber),
     }
   })
-  const total = count || 0
+  let total = count || 0
+  const demoMode = items.length === 0
+
+  if (demoMode) {
+    const demoBinNumbers = DEMO_CUSTOMER_BINS.map(item => item.bin_number)
+    const { data: demoActiveRequests } = await supabase
+      .from('service_requests')
+      .select('bin_number,status')
+      .eq('customer_id', user!.id)
+      .in('bin_number', demoBinNumbers)
+      .in('status', ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'in_progress'])
+    const activeDemoSwapBins = new Set((demoActiveRequests || []).map((request: any) => request.bin_number).filter(Boolean))
+
+    items = DEMO_CUSTOMER_BINS.map(item => ({
+      ...item,
+      client_id: null,
+      current_client_id: null,
+      jobsite_id: null,
+      current_jobsite_id: null,
+      active_swap_requested: activeDemoSwapBins.has(item.bin_number),
+    }))
+    total = items.length
+  }
 
   return (
     <div className="space-y-6">
@@ -89,6 +112,11 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
       </div>
 
       <div className="space-y-4">
+        {demoMode && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+            Demo customer account: these sample jobsites and bins let you test customer swap requests before a real customer profile is linked.
+          </div>
+        )}
         {items.length > 0 ? (
           <CustomerBinsList items={items} />
         ) : (

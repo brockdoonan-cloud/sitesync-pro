@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/lib/i18n'
+import { DEMO_CUSTOMER_BINS, demoJobsiteAddress } from '@/lib/demo/customerPortal'
 
 export default function RequestServicePage() {
   const { t } = useLanguage()
@@ -17,7 +18,7 @@ export default function RequestServicePage() {
     if (!form.service_type || !form.jobsite_address) { setError(t('serviceRequired')); return }
     setLoading(true); setError('')
     const { data: { user } } = await supabase.auth.getUser()
-    const notes = [form.time_preference ? `Preferred time: ${form.time_preference}.` : '', form.bin_number ? `Bin #${form.bin_number}.` : '', form.notes].filter(Boolean).join(' ')
+    const notes = [form.time_preference ? `Preferred time: ${form.time_preference}.` : '', form.bin_number ? `Bin #${form.bin_number}.` : '', 'Source: Customer Portal.', form.notes].filter(Boolean).join(' ')
     const { error: err } = await supabase.from('service_requests').insert({
       customer_id: user!.id,
       service_type: form.service_type,
@@ -37,6 +38,7 @@ export default function RequestServicePage() {
     <div className="max-w-md mx-auto text-center py-16">
       <h2 className="text-xl font-bold text-white mb-2">{t('requestSubmitted')}</h2>
       <p className="text-slate-400 mb-6">{t('confirmDriver')}</p>
+      <p className="text-slate-500 text-sm mb-6">Dispatch can now review this in the operator portal under Service Requests.</p>
       <div className="flex gap-3 justify-center">
         <button onClick={() => setSuccess(false)} className="btn-secondary px-5">{t('submitAnother')}</button>
         <button onClick={() => router.push('/dashboard/customer')} className="btn-primary px-6">{t('viewServices')}</button>
@@ -48,6 +50,34 @@ export default function RequestServicePage() {
     <div className="max-w-xl mx-auto space-y-6">
       <div><h1 className="text-2xl font-bold text-white">{t('requestService')}</h1><p className="text-slate-400 mt-1">{t('requestServiceSubtitle')}</p></div>
       {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
+      <div className="card space-y-3">
+        <div>
+          <h2 className="font-semibold text-white text-sm">Demo quick-fill</h2>
+          <p className="text-xs text-slate-400 mt-1">Pick a demo bin to submit a realistic customer swap request. It will appear in the operator requests board.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {DEMO_CUSTOMER_BINS.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setForm(f => ({
+                ...f,
+                service_type: 'swap',
+                jobsite_address: demoJobsiteAddress(item),
+                bin_number: item.bin_number,
+                notes: `Demo request for ${item.jobsite.name}. ${item.status === 'full' || item.status === 'needs_swap' ? 'Container is ready for swap.' : 'Customer is requesting a planned swap.'}`,
+              }))}
+              className="rounded-lg border border-slate-700/60 bg-slate-800/40 px-3 py-2 text-left transition-colors hover:border-sky-500/50 hover:bg-sky-500/10"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-white">{item.jobsite.name}</span>
+                <span className="font-mono text-xs text-sky-300">#{item.bin_number}</span>
+              </div>
+              <div className="mt-1 truncate text-xs text-slate-500">{demoJobsiteAddress(item)}</div>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="card space-y-5">
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">{t('serviceType')} *</label>

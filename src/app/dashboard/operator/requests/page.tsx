@@ -31,9 +31,11 @@ export default async function OperatorRequestsPage({ searchParams }: { searchPar
                     {(req.service_type || req.equipment_type || 'Service request')?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                   </h3>
                   <span className={`badge-${req.status}`}>{req.status}</span>
+                  {req.customer_id && <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">Customer Portal</span>}
                 </div>
                 <div className="space-y-1 text-sm text-slate-400">
                   <div>{req.jobsite_address || [req.address, req.city, req.zip].filter(Boolean).join(', ') || 'No address'}</div>
+                  {req.bin_number && <div className="font-mono text-sky-300">Bin #{req.bin_number}</div>}
                   {(req.preferred_date || req.scheduled_date) && <div>{new Date(req.preferred_date || req.scheduled_date).toLocaleDateString()}</div>}
                   {req.notes && <div> {req.notes}</div>}
                 </div>

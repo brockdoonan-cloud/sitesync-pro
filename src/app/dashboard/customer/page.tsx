@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { DEMO_CUSTOMER_BINS, demoJobsiteAddress } from '@/lib/demo/customerPortal'
 
 function titleize(value?: string) {
   return value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Service'
@@ -40,6 +41,9 @@ export default async function CustomerDashboard() {
   const binCount = binResult.count
   const activeCount = activeResult.count
   const activeRequests = requests?.filter((r: any) => ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'in_progress'].includes(r.status)).length ?? 0
+  const demoMode = clientIds.length === 0
+  const displayedBinCount = demoMode ? DEMO_CUSTOMER_BINS.length : binCount ?? 0
+  const displayedActiveCount = demoMode ? DEMO_CUSTOMER_BINS.filter(item => item.status === 'deployed').length : activeCount ?? 0
 
   const actions = [
     { href: '/dashboard/customer/request', label: 'Request Service', desc: 'Schedule swap, pickup, or delivery' },
@@ -57,8 +61,8 @@ export default async function CustomerDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Active Requests', value: activeRequests, className: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
-          { label: 'Tracked Bins', value: binCount ?? 0, className: 'bg-slate-700/40 text-white border-slate-600/40' },
-          { label: 'On Site', value: activeCount ?? 0, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
+          { label: 'Tracked Bins', value: displayedBinCount, className: 'bg-slate-700/40 text-white border-slate-600/40' },
+          { label: 'On Site', value: displayedActiveCount, className: 'bg-green-500/10 text-green-400 border-green-500/20' },
         ].map(stat => (
           <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.className}`}>
             <div className="text-2xl font-bold">{stat.value}</div>
@@ -66,6 +70,29 @@ export default async function CustomerDashboard() {
           </div>
         ))}
       </div>
+
+      {demoMode && (
+        <div className="card">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-white">Demo Customer Jobsites</h2>
+              <p className="text-sm text-slate-400 mt-1">Use these sample bins to submit swap requests and watch them appear in the operator portal.</p>
+            </div>
+            <Link href="/dashboard/customer/bins" className="btn-primary px-4 py-2 text-sm text-center">Request a Swap</Link>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {DEMO_CUSTOMER_BINS.slice(0, 4).map(item => (
+              <div key={item.id} className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium text-white">{item.jobsite.name}</div>
+                  <div className="font-mono text-xs text-sky-300">#{item.bin_number}</div>
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{demoJobsiteAddress(item)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {actions.map(action => (
