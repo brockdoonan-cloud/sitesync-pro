@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
 const DEFAULT_SOURCES = [
-  // Free public ZIP/city/state/county dataset. Replace ZIP_LOOKUP_CSV_URL with
-  // a USPS/HUD/Census enriched file later if you need postal-route precision.
-  'https://raw.githubusercontent.com/scpike/us-state-county-zip/master/geo-data.csv',
+  // Free public ZIP/city/state/county/lat/lng dataset. Replace
+  // ZIP_LOOKUP_CSV_URL with a USPS/HUD/Census enriched file later if you need
+  // paid postal-route precision or official monthly updates.
+  'https://gist.githubusercontent.com/Tucker-Eric/6a1a6b164726f21bb699623b06591389/raw/us_zips.csv',
 ]
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
