@@ -17,6 +17,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const navProfile = {
     ...(profile || {}),
     role: org?.isOperator ? 'operator' : profile?.role,
+    is_super_admin: org?.isSuperAdmin || false,
     company_name: org?.organizationName || profile?.company_name,
   }
 

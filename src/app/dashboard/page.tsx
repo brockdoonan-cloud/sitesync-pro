@@ -5,6 +5,7 @@ import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
 
 export default async function DashboardPage() {
   const org = await getCurrentOrg()
+  if (org?.isSuperAdmin) redirect('/dashboard/admin')
   if (org?.isOperator) redirect('/dashboard/operator')
   if (org?.isClient) redirect('/dashboard/customer')
 

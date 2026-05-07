@@ -11,6 +11,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   const router = useRouter()
   const pathname = usePathname()
   const isOp = isOperatorUser(profile, user?.email)
+  const isSuperAdmin = Boolean(profile?.is_super_admin)
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -20,6 +21,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   }
 
   const opLinks = [
+    ...(isSuperAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
     { href: '/dashboard/operator', label: t('overview') },
     { href: '/dashboard/operator/onboarding', label: t('setup') },
     { href: '/dashboard/operator/import', label: t('import') },

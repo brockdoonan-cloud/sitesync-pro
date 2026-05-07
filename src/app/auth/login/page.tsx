@@ -23,10 +23,12 @@ export default function LoginPage() {
       ? await supabase.from('organization_members').select('role').eq('user_id', data.user.id)
       : { data: null }
     const roles = new Set((memberships || []).map((membership: any) => membership.role))
+    const isSuperAdmin = roles.has('super_admin')
     const isOperator = ['super_admin', 'operator_admin', 'operator_member'].some(role => roles.has(role))
     const isCustomer = roles.has('client')
 
-    if (portal === 'customer' && isCustomer && !isOperator) router.push('/dashboard/customer')
+    if (isSuperAdmin) router.push('/dashboard/admin')
+    else if (portal === 'customer' && isCustomer && !isOperator) router.push('/dashboard/customer')
     else if (isOperator) router.push('/dashboard/operator')
     else router.push('/dashboard')
     router.refresh()
