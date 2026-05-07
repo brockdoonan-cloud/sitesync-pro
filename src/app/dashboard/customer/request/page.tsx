@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/lib/i18n'
 import { DEMO_CUSTOMER_BINS, demoJobsiteAddress } from '@/lib/demo/customerPortal'
@@ -12,26 +11,24 @@ export default function RequestServicePage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSubmit = async () => {
     if (!form.service_type || !form.jobsite_address) { setError(t('serviceRequired')); return }
     setLoading(true); setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-    const notes = [form.time_preference ? `Preferred time: ${form.time_preference}.` : '', form.bin_number ? `Bin #${form.bin_number}.` : '', 'Source: Customer Portal.', form.notes].filter(Boolean).join(' ')
-    const { error: err } = await supabase.from('service_requests').insert({
-      customer_id: user!.id,
-      service_type: form.service_type,
-      jobsite_address: form.jobsite_address,
-      service_address: form.jobsite_address,
-      preferred_date: form.preferred_date || null,
-      scheduled_date: form.preferred_date || null,
-      bin_number: form.bin_number || null,
-      priority: form.service_type === 'emergency' ? 'urgent' : form.service_type === 'swap' ? 'high' : 'normal',
-      notes,
-      status: 'dispatch_ready',
+    const response = await fetch('/api/customer/service-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_type: form.service_type,
+        jobsite_address: form.jobsite_address,
+        preferred_date: form.preferred_date || null,
+        bin_number: form.bin_number || null,
+        time_preference: form.time_preference,
+        notes: form.notes,
+      }),
     })
-    if (err) { setError(err.message); setLoading(false) } else { setSuccess(true) }
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) { setError(result.error || 'Could not submit request.'); setLoading(false) } else { setSuccess(true); setLoading(false) }
   }
 
   if (success) return (

@@ -1,8 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CalendarClock, CheckCircle2, RotateCw, X } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/lib/i18n'
 
 export type CustomerBinItem = {
@@ -54,7 +53,6 @@ export default function CustomerBinsList({ items }: { items: CustomerBinItem[] }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set())
-  const supabase = useMemo(() => createClient(), [])
   const today = new Date().toISOString().split('T')[0]
 
   const openSwap = (item: CustomerBinItem) => {
@@ -80,39 +78,32 @@ export default function CustomerBinsList({ items }: { items: CustomerBinItem[] }
 
     setLoading(true)
     setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError(t('signInTracking'))
-      setLoading(false)
-      return
-    }
-
     const binNumber = displayBinNumber(selected)
     const jobsiteAddress = formatAddress(selected)
     const noteText = [
       `Customer requested swap for bin #${binNumber}.`,
-      `Preferred time: ${preferredTime}.`,
       selected.jobsite?.name ? `Jobsite: ${selected.jobsite.name}.` : '',
       notes,
     ].filter(Boolean).join(' ')
 
-    const { error: insertError } = await supabase.from('service_requests').insert({
-      customer_id: user.id,
-      client_id: selected.client_id || selected.current_client_id || null,
-      jobsite_id: selected.jobsite_id || selected.current_jobsite_id || null,
-      service_type: 'swap',
-      jobsite_address: jobsiteAddress,
-      service_address: jobsiteAddress,
-      preferred_date: preferredDate,
-      scheduled_date: preferredDate,
-      bin_number: binNumber,
-      priority: 'high',
-      notes: noteText,
-      status: 'dispatch_ready',
+    const response = await fetch('/api/customer/service-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: selected.client_id || selected.current_client_id || null,
+        jobsite_id: selected.jobsite_id || selected.current_jobsite_id || null,
+        service_type: 'swap',
+        jobsite_address: jobsiteAddress,
+        preferred_date: preferredDate,
+        time_preference: preferredTime,
+        bin_number: binNumber,
+        notes: noteText,
+      }),
     })
+    const result = await response.json().catch(() => ({}))
 
-    if (insertError) {
-      setError(insertError.message)
+    if (!response.ok) {
+      setError(result.error || 'Could not submit request.')
       setLoading(false)
       return
     }
