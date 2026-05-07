@@ -25,10 +25,9 @@ export default function LoginPage() {
     const roles = new Set((memberships || []).map((membership: any) => membership.role))
     const isSuperAdmin = roles.has('super_admin')
     const isOperator = ['super_admin', 'operator_admin', 'operator_member'].some(role => roles.has(role))
-    const isCustomer = roles.has('client')
 
-    if (isSuperAdmin) router.push('/dashboard/admin')
-    else if (portal === 'customer' && isCustomer && !isOperator) router.push('/dashboard/customer')
+    if (portal === 'customer') router.push('/dashboard/customer')
+    else if (isSuperAdmin) router.push('/dashboard/admin')
     else if (isOperator) router.push('/dashboard/operator')
     else router.push('/dashboard')
     router.refresh()

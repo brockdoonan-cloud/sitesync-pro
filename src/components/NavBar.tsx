@@ -12,6 +12,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   const pathname = usePathname()
   const isOp = isOperatorUser(profile, user?.email)
   const isSuperAdmin = Boolean(profile?.is_super_admin)
+  const showingCustomerPortal = pathname.startsWith('/dashboard/customer')
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -43,7 +44,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/customer/tracking', label: t('track') },
     { href: '/dashboard/customer/billing', label: t('billing') },
   ]
-  const links = isOp ? opLinks : custLinks
+  const links = showingCustomerPortal ? custLinks : isOp ? opLinks : custLinks
 
   return (
     <nav className="border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-md sticky top-0 z-50">
