@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -13,9 +13,23 @@ export default function LoginPage() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
   const [portal, setPortal] = useState<PortalType>('operator')
   const router = useRouter(); const supabase = createClient()
+  const choosePortal = (nextPortal: PortalType) => {
+    setPortal(nextPortal)
+    window.localStorage.setItem('sitesync-portal-mode', nextPortal)
+    document.cookie = `sitesync-portal-mode=${nextPortal}; path=/; max-age=2592000; SameSite=Lax`
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requestedPortal = params.get('portal')
+    if (requestedPortal === 'customer' || requestedPortal === 'operator') choosePortal(requestedPortal)
+  }, [])
+
   const handleLogin = async () => {
     if (!email || !password) { setError(t('allFieldsRequired')); return }
     setLoading(true); setError('')
+    window.localStorage.setItem('sitesync-portal-mode', portal)
+    document.cookie = `sitesync-portal-mode=${portal}; path=/; max-age=2592000; SameSite=Lax`
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
 
@@ -26,10 +40,10 @@ export default function LoginPage() {
     const isSuperAdmin = roles.has('super_admin')
     const isOperator = ['super_admin', 'operator_admin', 'operator_member'].some(role => roles.has(role))
 
-    if (portal === 'customer') router.push('/dashboard/customer')
-    else if (isSuperAdmin) router.push('/dashboard/admin')
-    else if (isOperator) router.push('/dashboard/operator')
-    else router.push('/dashboard')
+    if (portal === 'customer') router.replace('/dashboard/customer')
+    else if (isSuperAdmin) router.replace('/dashboard/admin')
+    else if (isOperator) router.replace('/dashboard/operator')
+    else router.replace('/dashboard')
     router.refresh()
   }
 
@@ -72,7 +86,7 @@ export default function LoginPage() {
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setPortal(option.id)}
+                  onClick={() => choosePortal(option.id)}
                   className={`w-full text-left rounded-xl border p-4 transition-all ${active ? 'bg-sky-500/10 border-sky-400/50 shadow-lg shadow-sky-950/20' : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800/70'}`}
                 >
                   <div className="flex items-start gap-3">
@@ -94,13 +108,13 @@ export default function LoginPage() {
 
           <div className="card space-y-4">
             <div>
-              <div className="text-sm text-sky-300 font-semibold">{selectedPortal.label}</div>
+              <div className="text-sm text-sky-300 font-semibold">{portal === 'customer' ? t('customerPortal') : t('operatorPortal')}</div>
               <p className="text-slate-400 text-sm mt-1">{selectedPortal.helper}</p>
             </div>
             {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
             <div><label className="block text-sm font-medium text-slate-300 mb-1.5">{t('email')}</label><input type="email" className="input" placeholder={portal === 'customer' ? 'customer@company.com' : 'you@company.com'} value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
             <div><label className="block text-sm font-medium text-slate-300 mb-1.5">{t('password')}</label><input type="password" className="input" placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
-            <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">{loading ? t('signingIn') : `${t('signIn')} - ${selectedPortal.label}`}</button>
+            <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">{loading ? t('signingIn') : `${t('signIn')} - ${portal === 'customer' ? t('customerPortal') : t('operatorPortal')}`}</button>
             {portal === 'customer' && <p className="text-slate-500 text-xs text-center">{t('customerAccessNote')}</p>}
             <p className="text-center text-slate-400 text-sm">{t('noAccount')} {' '}<Link href="/auth/signup" className="text-sky-400 hover:text-sky-300 font-medium">{t('signUp')}</Link></p>
           </div>

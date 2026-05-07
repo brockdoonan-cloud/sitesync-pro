@@ -46,7 +46,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   ]
   const links = showingCustomerPortal ? custLinks : isOp ? opLinks : custLinks
   const homeHref = showingCustomerPortal ? '/dashboard/customer' : '/dashboard'
-  const portalLabel = showingCustomerPortal ? t('customerPortal') : isOp ? t('operatorPortal') : t('customerPortal')
+  const portalLabel = showingCustomerPortal ? t('customerPortal') : profile?.company_name || (isOp ? 'Operations' : t('customerPortal'))
 
   return (
     <nav className="border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-md sticky top-0 z-50">
@@ -78,7 +78,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <div className="text-xs font-medium text-white">{profile?.full_name ?? user.email}</div>
-            <div className="text-xs text-slate-500 capitalize">{showingCustomerPortal ? t('customerPortal') : profile?.company_name || portalLabel}</div>
+            <div className="text-xs text-slate-500 capitalize">{portalLabel}</div>
           </div>
           <button onClick={handleSignOut} className="text-slate-400 hover:text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-700/50">{t('signOut')}</button>
         </div>

@@ -73,7 +73,9 @@ export async function proxy(request: NextRequest) {
 
   if (user && request.nextUrl.pathname.startsWith('/auth') && !request.nextUrl.pathname.includes('/callback')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    const portalPreference = request.nextUrl.searchParams.get('portal') || request.cookies.get('sitesync-portal-mode')?.value
+    url.pathname = portalPreference === 'customer' ? '/dashboard/customer' : '/dashboard'
+    url.search = ''
     return NextResponse.redirect(url)
   }
 
