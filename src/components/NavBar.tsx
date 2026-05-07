@@ -45,16 +45,19 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/customer/billing', label: t('billing') },
   ]
   const links = showingCustomerPortal ? custLinks : isOp ? opLinks : custLinks
+  const homeHref = showingCustomerPortal ? '/dashboard/customer' : '/dashboard'
+  const portalLabel = showingCustomerPortal ? t('customerPortal') : isOp ? t('operatorPortal') : t('customerPortal')
 
   return (
     <nav className="border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-md sticky top-0 z-50">
       <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-14">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
+          <Link href={homeHref} className="flex items-center gap-2 shrink-0">
             <div className="w-7 h-7 bg-sky-500 rounded-md flex items-center justify-center">
               <svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M4 20L10 8L16 16L20 10L24 20H4Z" fill="white" /></svg>
             </div>
             <span className="font-bold text-white text-sm hidden sm:block">SiteSync Pro</span>
+            <span className="hidden xl:inline-flex text-[11px] text-slate-400 border border-slate-700/60 rounded-md px-2 py-0.5">{portalLabel}</span>
           </Link>
           <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
             {links.map(link => (
@@ -75,7 +78,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right hidden sm:block">
             <div className="text-xs font-medium text-white">{profile?.full_name ?? user.email}</div>
-            <div className="text-xs text-slate-500 capitalize">{profile?.company_name || profile?.role}</div>
+            <div className="text-xs text-slate-500 capitalize">{showingCustomerPortal ? t('customerPortal') : profile?.company_name || portalLabel}</div>
           </div>
           <button onClick={handleSignOut} className="text-slate-400 hover:text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-700/50">{t('signOut')}</button>
         </div>
