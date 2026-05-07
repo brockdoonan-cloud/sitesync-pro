@@ -8,6 +8,15 @@
 * { box-sizing: border-box; }
 body { min-height: 100vh; background: var(--background); }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .leaflet-container {
   width: 100%;
   height: 100%;

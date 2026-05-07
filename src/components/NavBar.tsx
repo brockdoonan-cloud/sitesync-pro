@@ -60,7 +60,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
             <span className="font-bold text-white text-sm hidden sm:block">SiteSync Pro</span>
             <span className="hidden xl:inline-flex text-[11px] text-slate-400 border border-slate-700/60 rounded-md px-2 py-0.5">{portalLabel}</span>
           </Link>
-          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
+          <div className="no-scrollbar hidden lg:flex items-center gap-0.5 overflow-x-auto">
             {links.map(link => (
               <Link
                 href={link.href}
@@ -85,7 +85,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
         </div>
       </div>
       <div className="container mx-auto px-4 max-w-7xl pb-2 lg:hidden">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="no-scrollbar flex gap-1 overflow-x-auto">
           {links.map(link => (
             <Link
               href={link.href}
