@@ -1129,10 +1129,34 @@ export default function RoutesPage() {
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
-                            <button onClick={() => runSavedStopAction(stop, 'en_route')} className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200">On way</button>
-                            <button onClick={() => runSavedStopAction(stop, 'arrived')} className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Arrived</button>
-                            <button onClick={() => runSavedStopAction(stop, 'complete')} className="rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-300">Complete</button>
-                            <button onClick={() => runSavedStopAction(stop, 'cancel')} className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300">Cancel</button>
+                            <button
+                              onClick={() => runSavedStopAction(stop, 'en_route')}
+                              disabled={['completed', 'cancelled'].includes((stop.status || '').toLowerCase())}
+                              className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-xs text-yellow-200 disabled:opacity-40"
+                            >
+                              On way
+                            </button>
+                            <button
+                              onClick={() => runSavedStopAction(stop, 'arrived')}
+                              disabled={['completed', 'cancelled'].includes((stop.status || '').toLowerCase())}
+                              className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 disabled:opacity-40"
+                            >
+                              Arrived
+                            </button>
+                            <button
+                              onClick={() => runSavedStopAction(stop, 'complete')}
+                              disabled={['completed', 'cancelled'].includes((stop.status || '').toLowerCase())}
+                              className="rounded-md border border-green-500/30 bg-green-500/10 px-2 py-1 text-xs text-green-300 disabled:opacity-40"
+                            >
+                              Complete
+                            </button>
+                            <button
+                              onClick={() => runSavedStopAction(stop, 'cancel')}
+                              disabled={['completed', 'cancelled'].includes((stop.status || '').toLowerCase())}
+                              className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-300 disabled:opacity-40"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         </div>
                       </div>

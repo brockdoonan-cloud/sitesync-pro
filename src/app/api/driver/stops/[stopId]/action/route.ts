@@ -25,6 +25,17 @@ async function nextOpenStop(supabase: any, routeId: string) {
   return data
 }
 
+async function findDriverBillingEvent(supabase: any, stopId: string) {
+  const { data } = await supabase
+    .from('billing_events')
+    .select('id')
+    .eq('source_file', 'driver_route_closeout')
+    .contains('payload', { route_stop_id: stopId })
+    .limit(1)
+    .maybeSingle()
+  return data || null
+}
+
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
@@ -87,6 +98,22 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
 
     if (action === 'complete') {
+      if ((stop.status || '').toLowerCase() === 'cancelled') {
+        return NextResponse.json({ error: 'Cancelled stops cannot be completed. Reopen or recreate the stop first.' }, { status: 409 })
+      }
+
+      if ((stop.status || '').toLowerCase() === 'completed') {
+        const nextStop = stop.route_id ? await nextOpenStop(supabase, stop.route_id) : null
+        await supabase
+          .from('driver_routes')
+          .update({
+            current_stop_id: nextStop?.id || null,
+            status: nextStop ? 'in_progress' : 'ready_to_close',
+          })
+          .eq('id', stop.route_id)
+        return NextResponse.json({ stop, nextStop, billingAlreadyRecorded: Boolean(await findDriverBillingEvent(supabase, stopId)) })
+      }
+
       const now = new Date().toISOString()
       const binNumber = firstBinNumber(stop)
       const finalStatus = String(stop.stop_type || '').toLowerCase().includes('pickup') ? 'available' : 'deployed'
@@ -126,21 +153,26 @@ export async function POST(request: NextRequest, { params }: Params) {
           .eq('id', stop.service_request_id)
       }
 
-      await supabase.from('billing_events').insert({
-        organization_id: stop.organization_id,
-        event_date: now.slice(0, 10),
-        event_type: billingEventTypeForStop(stop.stop_type),
-        source_file: 'driver_route_closeout',
-        project_name: stop.address || null,
-        bin_number: binNumber,
-        payload: {
-          route_id: stop.route_id,
-          route_stop_id: stopId,
-          service_request_id: stop.service_request_id,
-          stop_type: stop.stop_type,
-          proof_notes: body?.proof_notes || null,
-        },
-      })
+      const existingBillingEvent = await findDriverBillingEvent(supabase, stopId)
+      if (!existingBillingEvent) {
+        await supabase.from('billing_events').insert({
+          organization_id: stop.organization_id,
+          event_date: now.slice(0, 10),
+          event_type: billingEventTypeForStop(stop.stop_type),
+          source_file: 'driver_route_closeout',
+          project_name: stop.address || null,
+          bin_number: binNumber,
+          payload: {
+            route_id: stop.route_id,
+            route_stop_id: stopId,
+            service_request_id: stop.service_request_id,
+            stop_type: stop.stop_type,
+            proof_notes: body?.proof_notes || null,
+            completed_by_user_id: org.user.id,
+            completed_at: now,
+          },
+        })
+      }
 
       const nextStop = stop.route_id ? await nextOpenStop(supabase, stop.route_id) : null
       await supabase

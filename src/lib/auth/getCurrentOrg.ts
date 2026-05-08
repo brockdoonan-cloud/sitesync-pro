@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { isOperatorUser } from '@/lib/operator'
 import { setSentryUserContext } from '@/lib/monitoring/sentry'
 
-export type OrgRole = 'super_admin' | 'operator_admin' | 'operator_member' | 'client'
+export type OrgRole = 'super_admin' | 'operator_admin' | 'operator_member' | 'driver' | 'client'
 
 export type CurrentOrg = {
   user: any
@@ -18,6 +18,7 @@ const ROLE_PRIORITY: Record<OrgRole, number> = {
   super_admin: 4,
   operator_admin: 3,
   operator_member: 2,
+  driver: 2,
   client: 1,
 }
 
@@ -45,7 +46,7 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
       organizationName: organization?.name || null,
       role,
       isSuperAdmin: role === 'super_admin',
-      isOperator: ['super_admin', 'operator_admin', 'operator_member'].includes(role),
+      isOperator: ['super_admin', 'operator_admin', 'operator_member', 'driver'].includes(role),
       isClient: role === 'client',
     }
     setSentryUserContext({ userId: user.id, organizationId: currentOrg.organizationId, role: currentOrg.role })
