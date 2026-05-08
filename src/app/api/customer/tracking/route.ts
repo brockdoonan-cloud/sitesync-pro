@@ -25,18 +25,17 @@ export async function GET() {
     const { data: stops } = requestIds.length
       ? await admin
           .from('route_stops')
-          .select('*,driver_routes(id,truck_id,truck_number,driver_id,driver_name,status,opened_at,closed_at,current_stop_id,last_eta_at)')
+          .select('*,driver_routes(id,organization_id,truck_id,truck_number,driver_id,driver_name,status,opened_at,closed_at,current_stop_id,last_eta_at)')
           .in('service_request_id', requestIds)
       : { data: [] }
 
     const truckNumbers = [...new Set((stops || []).map((stop: any) => stop.driver_routes?.truck_number).filter(Boolean))]
-    const { data: locations } = truckNumbers.length
-      ? await admin
-          .from('truck_locations')
-          .select('*')
-          .in('truck_number', truckNumbers)
-          .order('recorded_at', { ascending: false })
-      : { data: [] }
+    const organizationIds = [...new Set((stops || []).map((stop: any) => stop.driver_routes?.organization_id).filter(Boolean))]
+    let locationQuery = truckNumbers.length
+      ? admin.from('truck_locations').select('*').in('truck_number', truckNumbers).order('recorded_at', { ascending: false })
+      : null
+    if (locationQuery && organizationIds.length) locationQuery = locationQuery.in('organization_id', organizationIds)
+    const { data: locations } = locationQuery ? await locationQuery : { data: [] }
 
     const latestByTruck = new Map<string, any>()
     for (const location of locations || []) {

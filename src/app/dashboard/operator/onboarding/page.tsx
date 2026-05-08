@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 type ClientRow = { id: string; company_name?: string | null; name?: string | null; email?: string | null }
@@ -313,7 +314,10 @@ export default function OperatorOnboardingPage() {
               <option value="offline">Offline</option>
             </select>
           </div>
-          <button disabled={loading} onClick={saveTruck} className="btn-primary px-4 py-2">Save Truck</button>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={loading} onClick={saveTruck} className="btn-primary px-4 py-2">Save Truck</button>
+            <Link href="/dashboard/operator/trucks/onboarding" className="btn-secondary px-4 py-2">Connect GPS Provider</Link>
+          </div>
         </section>
       </div>
     </div>

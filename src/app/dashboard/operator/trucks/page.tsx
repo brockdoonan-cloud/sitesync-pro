@@ -15,6 +15,8 @@ type Truck = {
   lng?: number
   last_seen?: string
   capacity?: number
+  tracking_provider?: string | null
+  external_vehicle_id?: string | null
 }
 
 type LatLng = { lat: number; lng: number }
@@ -276,6 +278,8 @@ export default function TrucksPage() {
         lng: truck.current_lng || truck.lng,
         last_seen: truck.last_seen_at || truck.last_seen || truck.updated_at,
         capacity: truck.capacity || 6,
+        tracking_provider: truck.tracking_provider_name || truck.tracking_provider || null,
+        external_vehicle_id: truck.external_vehicle_id || null,
       })))
     } else {
       setTrucks(DEMO_TRUCKS)
@@ -315,6 +319,7 @@ export default function TrucksPage() {
           <p className="text-slate-400 mt-1">Live fleet tracking with the same real-world map layer used by equipment.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/dashboard/operator/trucks/onboarding" className="btn-secondary text-sm px-4 py-2">Tracking Setup</Link>
           <button onClick={loadTrucks} className="btn-secondary text-sm px-4 py-2">Refresh</button>
           <Link href="/dashboard/operator/routes" className="btn-primary text-sm px-4 py-2">Optimize Routes</Link>
         </div>
@@ -322,7 +327,7 @@ export default function TrucksPage() {
 
       {trucks.some(truck => truck.id.startsWith('demo-')) && (
         <div className="bg-sky-500/10 border border-sky-500/30 text-sky-400 text-sm rounded-xl px-4 py-3">
-          Demo mode is simulating GPS movement. Production tracking uses driver app location pings into Supabase.
+          Demo mode is simulating GPS movement. Use Tracking Setup to onboard Samsara, Geotab, Verizon Connect, Motive, Azuga, or any other GPS provider.
         </div>
       )}
 
@@ -374,6 +379,12 @@ export default function TrucksPage() {
                 </span>
               </div>
               <div className="text-slate-400 text-sm mb-1">{truck.driver || 'Unassigned'}</div>
+              {truck.tracking_provider && (
+                <div className="text-xs text-slate-500 mb-1">
+                  Provider: <span className="text-slate-300">{truck.tracking_provider}</span>
+                  {truck.external_vehicle_id ? <span> | ID {truck.external_vehicle_id}</span> : null}
+                </div>
+              )}
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>GPS: {tick >= 0 && timeAgo(truck.last_seen)}</span>
                 {truck.lat && truck.lng && (
