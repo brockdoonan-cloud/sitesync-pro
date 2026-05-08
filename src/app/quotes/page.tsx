@@ -89,12 +89,15 @@ export default function QuotesPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-white mb-3">{t('requestSent')}</h1>
+          <p className="text-slate-300 mb-3 text-lg">
+            {t('requestSubmittedConfirmed')}
+          </p>
           <p className="text-slate-400 mb-2 text-lg">
             {t('requestSentToProviders')}{' '}
             <span className="text-sky-400 font-semibold">{city}, {zip}</span>.
           </p>
           <p className="text-slate-500 text-sm mb-8">
-            {t('quotesSentTo')} <strong className="text-slate-300">{email}</strong>. We also sent your tracking link for comparing responses.
+            {t('confirmationSentTo')} <strong className="text-slate-300">{email}</strong>. {phone ? t('smsConfirmationCopy') : t('saveTrackingLinkCopy')}
           </p>
           {magicLink && (
             <Link href={magicLink} className="mb-6 inline-flex rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-sm font-medium text-sky-400 hover:bg-sky-500/20">

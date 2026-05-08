@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type Lead = {
@@ -37,11 +37,13 @@ function money(value: number | string) {
 
 export default function LeadDetailPage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [lead, setLead] = useState<Lead | null>(null)
   const [existing, setExisting] = useState<QuoteResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState('')
   const [price, setPrice] = useState('')
@@ -104,6 +106,23 @@ export default function LeadDetailPage() {
     setEditing(false)
   }
 
+  const deleteLead = async () => {
+    if (!lead || !window.confirm(`Delete the lead from ${lead.name || 'this contractor'}? This removes it from the operator inbox.`)) return
+    setDeleting(true)
+    setError('')
+
+    const response = await fetch(`/api/quote-requests/${lead.id}`, { method: 'DELETE' })
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      setDeleting(false)
+      setError(payload.error || 'Could not delete lead.')
+      return
+    }
+
+    router.push('/dashboard/operator/leads')
+  }
+
   if (loading) {
     return <div className="h-64 bg-slate-800/40 rounded-xl animate-pulse" />
   }
@@ -128,9 +147,19 @@ export default function LeadDetailPage() {
           <h1 className="text-2xl font-bold text-white mt-2">{lead.name || 'Quote request'}</h1>
           <p className="text-slate-400 mt-1">{lead.equipment_type}{lead.dumpster_size ? ` - ${lead.dumpster_size}` : ''}</p>
         </div>
-        <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-400 capitalize">
-          {lead.status || 'open'}
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-400 capitalize">
+            {lead.status || 'open'}
+          </span>
+          <button
+            type="button"
+            onClick={deleteLead}
+            disabled={deleting}
+            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+          >
+            {deleting ? 'Deleting...' : 'Delete Lead'}
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

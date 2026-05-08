@@ -27,6 +27,9 @@ export default function LeadsPage() {
   const [filter, setFilter] = useState('open')
   const [sending, setSending] = useState(false)
   const [smsResult, setSmsResult] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
+  const [actionError, setActionError] = useState(false)
+  const [deletingId, setDeletingId] = useState('')
   const [note, setNote] = useState('')
   const [total, setTotal] = useState(0)
   const [statusCounts, setStatusCounts] = useState({ open: 0, contacted: 0, quoted: 0, won: 0 })
@@ -119,6 +122,29 @@ export default function LeadsPage() {
     if (selected?.id===id) setSelected(p => p ? {...p,status} : p)
   }
 
+  const deleteLead = async (lead: Lead) => {
+    if (!window.confirm(`Delete the lead from ${lead.name}? This removes it from the operator inbox.`)) return
+    setDeletingId(lead.id)
+    setActionMessage('')
+    setActionError(false)
+
+    const response = await fetch(`/api/quote-requests/${lead.id}`, { method: 'DELETE' })
+    const payload = await response.json().catch(() => ({}))
+    setDeletingId('')
+
+    if (!response.ok) {
+      setActionError(true)
+      setActionMessage(payload.error || 'Could not delete lead.')
+      return
+    }
+
+    setSelected(current => current?.id === lead.id ? null : current)
+    setLeads(current => current.filter(item => item.id !== lead.id))
+    setActionMessage('Lead deleted from the operator inbox.')
+    setActionError(false)
+    await load()
+  }
+
   const sendSMS = async (type: string) => {
     if (!selected?.phone) { setSmsResult('No phone number on file'); return }
     setSending(true); setSmsResult('')
@@ -180,6 +206,12 @@ export default function LeadsPage() {
         ))}
       </div>
 
+      {actionMessage && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${actionError ? 'border-red-500/30 bg-red-500/10 text-red-400' : 'border-green-500/30 bg-green-500/10 text-green-400'}`}>
+          {actionMessage}
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">{[1,2,3].map(i=><div key={i} className="h-16 bg-slate-800/40 rounded-xl animate-pulse"/>)}</div>
       ) : leads.length===0 ? (
@@ -215,6 +247,17 @@ export default function LeadsPage() {
                 >
                   Send Quote
                 </Link>
+                <button
+                  type="button"
+                  onClick={event => {
+                    event.stopPropagation()
+                    deleteLead(lead)
+                  }}
+                  disabled={deletingId === lead.id}
+                  className="shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  {deletingId === lead.id ? 'Deleting...' : 'Delete'}
+                </button>
                 <div className="text-right shrink-0 text-slate-500 text-xs">
                   {new Date(lead.created_at).toLocaleDateString()}
                 </div>
@@ -319,6 +362,15 @@ export default function LeadsPage() {
                   className="btn-primary text-sm px-4 py-2 flex-1 text-center">Email Customer</a>
                 {selected.phone && <a href={`tel:${selected.phone}`} className="btn-secondary text-sm px-4 py-2">Call</a>}
               </div>
+
+              <button
+                type="button"
+                onClick={() => deleteLead(selected)}
+                disabled={deletingId === selected.id}
+                className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+              >
+                {deletingId === selected.id ? 'Deleting lead...' : 'Delete Lead'}
+              </button>
             </div>
           </div>
         </div>

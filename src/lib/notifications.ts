@@ -76,23 +76,27 @@ export async function sendEmail({ to, subject, text, html }: EmailInput) {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return { success: false, skipped: true, reason: 'not_configured' }
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: process.env.RESEND_FROM_EMAIL || 'SiteSync Pro <notifications@sitesync-pro.vercel.app>',
-      to,
-      subject,
-      text,
-      html: html || text.replace(/\n/g, '<br />'),
-    }),
-  })
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM_EMAIL || 'SiteSync Pro <notifications@sitesync-pro.vercel.app>',
+        to,
+        subject,
+        text,
+        html: html || text.replace(/\n/g, '<br />'),
+      }),
+    })
 
-  const payload = await response.json().catch(() => ({}))
-  return { success: response.ok, payload, error: response.ok ? null : payload.error || payload.message || 'Email failed' }
+    const payload = await response.json().catch(() => ({}))
+    return { success: response.ok, payload, error: response.ok ? null : payload.error || payload.message || 'Email failed' }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Email failed' }
+  }
 }
 
 export async function notifyQuoteReceived(request: any) {
@@ -101,11 +105,11 @@ export async function notifyQuoteReceived(request: any) {
   const link = `${appBaseUrl()}/quote/${token}`
   const text = `SiteSync Pro: Your request was received. Track responses here: ${link}`
 
-  await Promise.all([
+  await Promise.allSettled([
     sendEmail({
       to: request.email,
       subject: 'Your SiteSync Pro quote request was received',
-      text: `Your request was received.\n\nTrack responses here: ${link}`,
+      text: `Your request was submitted successfully.\n\nTrack responses here: ${link}`,
     }),
     sendQuoSms({
       phone: request.phone,
@@ -121,7 +125,7 @@ export async function notifyQuoteResponse(request: any, response: any, supabase?
   const amount = Number(response.price_quote || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
   const sms = `New quote from ${response.operator_company}: ${amount}. Compare: ${link}`
 
-  await Promise.all([
+  await Promise.allSettled([
     sendEmail({
       to: request.email,
       subject: `${response.operator_company} sent you a quote`,
@@ -142,7 +146,7 @@ export async function notifySelectedOperator(request: any, response: any, supaba
   const contact = [request.phone, request.email].filter(Boolean).join(' / ')
   const message = `SiteSync Pro: You won ${request.name || 'a contractor'}'s quote. Contact: ${contact || 'Open SiteSync for details'}`
 
-  await Promise.all([
+  await Promise.allSettled([
     sendEmail({
       to: response.operator_email,
       subject: 'You won a SiteSync Pro quote',
