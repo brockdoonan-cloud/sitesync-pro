@@ -1,34 +1,27 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { DEMO_CUSTOMER_BINS, demoJobsiteAddress } from '@/lib/demo/customerPortal'
+import CustomerAccessLink from '@/components/customer/CustomerAccessLink'
+import { clientIdOrFilter, getCustomerClientIds } from '@/lib/customer/access'
 
 function titleize(value?: string) {
   return value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Service'
-}
-
-function normalizeEmail(value?: string | null) {
-  return value?.trim().toLowerCase() || ''
 }
 
 export default async function CustomerDashboard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('full_name,company_name').eq('id', user!.id).single()
-  const { data: clients } = await supabase.from('clients').select('id,email,billing_email').limit(500)
-  const userEmail = normalizeEmail(user?.email)
-  const clientIds = (clients || [])
-    .filter((client: any) => [normalizeEmail(client.email), normalizeEmail(client.billing_email)].filter(Boolean).includes(userEmail))
-    .map((client: any) => client.id)
-  const clientIdList = clientIds.join(',')
+  const clientIds = await getCustomerClientIds(supabase, user)
 
   const equipmentCountQuery = clientIds.length > 0
     ? supabase.from('equipment').select('id', { count: 'exact', head: true })
-      .or(`client_id.in.(${clientIdList}),current_client_id.in.(${clientIdList})`)
+      .or(clientIdOrFilter(clientIds))
       .in('status', ['deployed', 'needs_swap', 'full', 'in_transit'])
     : null
   const activeEquipmentCountQuery = clientIds.length > 0
     ? supabase.from('equipment').select('id', { count: 'exact', head: true })
-      .or(`client_id.in.(${clientIdList}),current_client_id.in.(${clientIdList})`)
+      .or(clientIdOrFilter(clientIds))
       .eq('status', 'deployed')
     : null
 
@@ -70,6 +63,10 @@ export default async function CustomerDashboard() {
           </div>
         ))}
       </div>
+
+      {demoMode && (
+        <CustomerAccessLink />
+      )}
 
       {demoMode && (
         <div className="card">

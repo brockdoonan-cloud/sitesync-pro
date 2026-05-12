@@ -7,7 +7,7 @@ import { useLanguage } from '@/lib/i18n'
 
 export default function SignupPage() {
   const { t } = useLanguage()
-  const [form, setForm] = useState({ email: '', password: '', full_name: '', company_name: '', role: 'customer' })
+  const [form, setForm] = useState({ email: '', password: '', full_name: '', company_name: '', role: 'customer', customer_access_code: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -29,6 +29,7 @@ export default function SignupPage() {
           full_name: form.full_name,
           company_name: form.company_name,
           role: form.role,
+          customer_access_code: form.customer_access_code.trim() || undefined,
         },
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
@@ -86,6 +87,17 @@ export default function SignupPage() {
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('password')} *</label>
             <input type="password" className="input" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Customer access code</label>
+            <input
+              type="text"
+              className="input font-mono uppercase"
+              placeholder="Optional"
+              value={form.customer_access_code}
+              onChange={e => setForm(f => ({ ...f, customer_access_code: e.target.value.toUpperCase() }))}
+            />
+            <p className="mt-1 text-xs text-slate-500">Use the code from your service provider to unlock your company&apos;s bins, swaps, tracking, and invoices.</p>
           </div>
           <button onClick={handleSignup} disabled={loading} className="btn-primary w-full py-3">{loading ? t('creating') : t('createAccount')}</button>
           <p className="text-center text-slate-400 text-sm">{t('alreadyAccount')} <Link href="/auth/login" className="text-sky-400 hover:text-sky-300 font-medium">{t('signIn')}</Link></p>

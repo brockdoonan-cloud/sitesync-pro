@@ -4,13 +4,28 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
-import { etaFromMinutes } from '@/lib/dispatch/lifecycle'
+import { etaFromMinutes, stopSwapPlan } from '@/lib/dispatch/lifecycle'
 
 type Params = { params: Promise<{ routeId: string }> }
 
 function canAccessRoute(org: Awaited<ReturnType<typeof getCurrentOrg>>, route: any) {
   if (!org) return false
   return org.isSuperAdmin || route.organization_id === org.organizationId
+}
+
+async function markDeliveryBinInTransit(supabase: any, organizationId: string, stop: any) {
+  const plan = stopSwapPlan(stop)
+  if (!plan.deliveryBin) return
+  await supabase
+    .from('equipment')
+    .update({
+      status: 'in_transit',
+      location: `On truck to ${stop.address || 'route stop'}`,
+      jobsite_id: null,
+      last_serviced_at: new Date().toISOString(),
+    })
+    .eq('bin_number', plan.deliveryBin)
+    .eq('organization_id', organizationId)
 }
 
 export async function POST(request: NextRequest, { params }: Params) {
@@ -65,6 +80,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           .from('route_stops')
           .update({ status: 'en_route', started_at: new Date().toISOString(), eta, eta_minutes: Number(body?.eta_minutes) || 45 })
           .eq('id', nextStop.id)
+        await markDeliveryBinInTransit(supabase, route.organization_id, nextStop)
         if (nextStop.service_request_id) {
           await supabase
             .from('service_requests')

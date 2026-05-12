@@ -5,6 +5,7 @@ import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
 import { getClientIp } from '@/lib/request'
 import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
+import { getCustomerClientIds } from '@/lib/customer/access'
 
 const activeServiceTypes = new Set(['swap', 'removal', 'delivery', 'pump_out', 'emergency'])
 
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
   const preferredDate = clean(body.preferred_date)
   const timePreference = clean(body.time_preference)
   const rawNotes = clean(body.notes)
+  const clientId = clean(body.client_id)
 
   if (!activeServiceTypes.has(serviceType)) {
     return NextResponse.json({ error: 'Choose a valid service type.' }, { status: 400 })
@@ -46,16 +48,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Jobsite address is required.' }, { status: 400 })
   }
 
+  const allowedClientIds = await getCustomerClientIds(supabase, user)
+  if (clientId && !allowedClientIds.includes(clientId)) {
+    return NextResponse.json({ error: 'This customer account is not linked to that client.' }, { status: 403 })
+  }
+
   const notes = [
     timePreference ? `Preferred time: ${timePreference}.` : '',
-    binNumber ? `Bin #${binNumber}.` : '',
+    binNumber ? `Pickup bin: ${binNumber}.` : '',
     'Source: Customer Portal.',
     rawNotes,
   ].filter(Boolean).join(' ')
 
   const payload = {
     customer_id: user.id,
-    client_id: clean(body.client_id) || null,
+    client_id: clientId || null,
     jobsite_id: clean(body.jobsite_id) || null,
     service_type: serviceType,
     jobsite_address: jobsiteAddress,

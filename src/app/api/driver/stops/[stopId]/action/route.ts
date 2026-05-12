@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { billingEventTypeForStop, etaFromMinutes, firstBinNumber } from '@/lib/dispatch/lifecycle'
+import { billingEventTypeForStop, etaFromMinutes, firstBinNumber, stopSwapPlan } from '@/lib/dispatch/lifecycle'
 import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
 
@@ -36,6 +36,62 @@ async function findDriverBillingEvent(supabase: any, stopId: string) {
   return data || null
 }
 
+async function findOrCreateJobsite(supabase: any, organizationId: string, name?: string | null, address?: string | null) {
+  const cleanName = name?.trim() || ''
+  const cleanAddress = address?.trim() || ''
+  if (!cleanName && !cleanAddress) return null
+
+  if (cleanAddress) {
+    const { data } = await supabase
+      .from('jobsites')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('address', cleanAddress)
+      .limit(1)
+      .maybeSingle()
+    if (data?.id) return data.id
+  }
+
+  if (cleanName) {
+    const { data } = await supabase
+      .from('jobsites')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('name', cleanName)
+      .limit(1)
+      .maybeSingle()
+    if (data?.id) return data.id
+  }
+
+  const { data: created, error } = await supabase
+    .from('jobsites')
+    .insert({
+      organization_id: organizationId,
+      name: cleanName || cleanAddress,
+      address: cleanAddress || cleanName,
+      status: 'active',
+    })
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return created.id
+}
+
+async function updateEquipmentByBin(supabase: any, organizationId: string, binNumber: string | null, values: Record<string, unknown>) {
+  if (!binNumber) return null
+  const { data, error } = await supabase
+    .from('equipment')
+    .update(values)
+    .eq('bin_number', binNumber)
+    .eq('organization_id', organizationId)
+    .select('id,bin_number,status,location,jobsite_id')
+    .maybeSingle()
+
+  if (error) throw error
+  return data || null
+}
+
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
@@ -58,6 +114,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   try {
     if (action === 'eta' || action === 'en_route') {
       const eta = etaFromMinutes(body?.eta_minutes)
+      const plan = stopSwapPlan(stop, body)
       const { data: updatedStop, error } = await supabase
         .from('route_stops')
         .update({
@@ -71,6 +128,13 @@ export async function POST(request: NextRequest, { params }: Params) {
         .select('*')
         .single()
       if (error) throw error
+
+      await updateEquipmentByBin(supabase, stop.organization_id, plan.deliveryBin, {
+        status: 'in_transit',
+        location: `On truck to ${stop.address || 'route stop'}`,
+        jobsite_id: null,
+        last_serviced_at: new Date().toISOString(),
+      })
 
       await supabase.from('driver_routes').update({ status: 'in_progress', current_stop_id: stopId, last_eta_at: eta, opened_at: new Date().toISOString() }).eq('id', stop.route_id)
       if (stop.service_request_id) {
@@ -115,9 +179,14 @@ export async function POST(request: NextRequest, { params }: Params) {
       }
 
       const now = new Date().toISOString()
-      const binNumber = firstBinNumber(stop)
-      const finalStatus = String(stop.stop_type || '').toLowerCase().includes('pickup') ? 'available' : 'deployed'
-      const finalLocation = body?.final_location ? String(body.final_location) : stop.address || 'Completed route stop'
+      const plan = stopSwapPlan(stop, body)
+      const fallbackBinNumber = firstBinNumber(stop)
+      const pickupBin = plan.pickupBin || fallbackBinNumber
+      const deliveryBin = plan.deliveryBin
+      const stopType = String(stop.stop_type || '').toLowerCase()
+      const dropoffLocation = plan.dropoffAddress || plan.dropoffJobsite
+      const deliveryLocation = body?.final_location ? String(body.final_location) : stop.address || 'Completed route stop'
+      let dropoffJobsiteId: string | null = null
 
       const { data: updatedStop, error } = await supabase
         .from('route_stops')
@@ -132,12 +201,39 @@ export async function POST(request: NextRequest, { params }: Params) {
         .single()
       if (error) throw error
 
-      if (binNumber) {
-        await supabase
-          .from('equipment')
-          .update({ status: finalStatus, location: finalLocation, last_serviced_at: now })
-          .eq('bin_number', binNumber)
-          .eq('organization_id', stop.organization_id)
+      if (deliveryBin) {
+        await updateEquipmentByBin(supabase, stop.organization_id, deliveryBin, {
+          status: 'deployed',
+          location: deliveryLocation,
+          jobsite_id: stop.jobsite_id || null,
+          last_serviced_at: now,
+        })
+      }
+
+      if (pickupBin && pickupBin !== deliveryBin) {
+        if (dropoffLocation) {
+          dropoffJobsiteId = await findOrCreateJobsite(supabase, stop.organization_id, plan.dropoffJobsite, plan.dropoffAddress)
+          await updateEquipmentByBin(supabase, stop.organization_id, pickupBin, {
+            status: 'deployed',
+            location: dropoffLocation,
+            jobsite_id: dropoffJobsiteId,
+            last_serviced_at: now,
+          })
+        } else if (stopType.includes('pickup') || stopType.includes('removal') || deliveryBin) {
+          await updateEquipmentByBin(supabase, stop.organization_id, pickupBin, {
+            status: 'available',
+            location: plan.landfill || 'Returned from route',
+            jobsite_id: null,
+            last_serviced_at: now,
+          })
+        } else {
+          await updateEquipmentByBin(supabase, stop.organization_id, pickupBin, {
+            status: 'deployed',
+            location: deliveryLocation,
+            jobsite_id: stop.jobsite_id || null,
+            last_serviced_at: now,
+          })
+        }
       }
 
       if (stop.service_request_id) {
@@ -148,7 +244,12 @@ export async function POST(request: NextRequest, { params }: Params) {
             completed_at: now,
             route_stop_id: stopId,
             eta_at: null,
-            notes: [stop.notes, body?.proof_notes ? `Driver closeout: ${body.proof_notes}` : 'Driver marked service complete.'].filter(Boolean).join('\n'),
+            notes: [
+              stop.notes,
+              `Driver closeout: delivered ${deliveryBin ? `bin #${deliveryBin}` : 'assigned bin'} and picked up ${pickupBin ? `bin #${pickupBin}` : 'assigned bin'}.`,
+              dropoffLocation ? `Pickup bin final dropoff: ${dropoffLocation}.` : '',
+              body?.proof_notes ? `Driver proof: ${body.proof_notes}` : '',
+            ].filter(Boolean).join('\n'),
           })
           .eq('id', stop.service_request_id)
       }
@@ -161,12 +262,18 @@ export async function POST(request: NextRequest, { params }: Params) {
           event_type: billingEventTypeForStop(stop.stop_type),
           source_file: 'driver_route_closeout',
           project_name: stop.address || null,
-          bin_number: binNumber,
+          bin_number: deliveryBin || pickupBin,
           payload: {
             route_id: stop.route_id,
             route_stop_id: stopId,
             service_request_id: stop.service_request_id,
             stop_type: stop.stop_type,
+            pickup_bin_number: pickupBin,
+            delivery_bin_number: deliveryBin,
+            landfill: plan.landfill,
+            dropoff_jobsite: plan.dropoffJobsite,
+            dropoff_jobsite_id: dropoffJobsiteId,
+            dropoff_address: plan.dropoffAddress,
             proof_notes: body?.proof_notes || null,
             completed_by_user_id: org.user.id,
             completed_at: now,

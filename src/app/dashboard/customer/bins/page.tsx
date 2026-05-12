@@ -2,17 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import PaginationControls from '@/components/PaginationControls'
 import { paginate } from '@/lib/pagination'
 import CustomerBinsList, { type CustomerBinItem } from '@/components/customer/CustomerBinsList'
+import CustomerAccessLink from '@/components/customer/CustomerAccessLink'
 import { DEMO_CUSTOMER_BINS } from '@/lib/demo/customerPortal'
-
-type ClientRow = {
-  id: string
-  email?: string | null
-  billing_email?: string | null
-}
-
-function normalizeEmail(value?: string | null) {
-  return value?.trim().toLowerCase() || ''
-}
+import { clientIdOrFilter, getCustomerClientIds } from '@/lib/customer/access'
 
 function binNumberFor(item: any) {
   return item.bin_number || item.container_number || item.id?.slice(0, 8)
@@ -23,29 +15,16 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
   const { data: { user } } = await supabase.auth.getUser()
   const resolvedSearchParams = await searchParams
   const pagination = paginate({ page: resolvedSearchParams?.page })
-  const userEmail = normalizeEmail(user?.email)
-
-  const { data: clientRows } = await supabase
-    .from('clients')
-    .select('id,email,billing_email')
-    .limit(500)
-
-  const clientIds = (clientRows || [])
-    .filter((client: ClientRow) => {
-      const emails = [normalizeEmail(client.email), normalizeEmail(client.billing_email)].filter(Boolean)
-      return emails.length === 0 ? false : emails.includes(userEmail)
-    })
-    .map((client: ClientRow) => client.id)
+  const clientIds = await getCustomerClientIds(supabase, user)
 
   let rows: any[] | null = []
   let count = 0
 
   if (clientIds.length > 0) {
-    const clientIdList = clientIds.join(',')
     const result = await supabase
       .from('equipment')
       .select('id,bin_number,container_number,type,status,location,last_serviced_at,client_id,current_client_id,jobsite_id,current_jobsite_id', { count: 'exact' })
-      .or(`client_id.in.(${clientIdList}),current_client_id.in.(${clientIdList})`)
+      .or(clientIdOrFilter(clientIds))
       .in('status', ['deployed', 'needs_swap', 'full', 'in_transit'])
       .order('bin_number', { ascending: true })
       .range(pagination.from, pagination.to)
@@ -60,14 +39,19 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
   const jobsitesById = new Map((jobsites || []).map((jobsite: any) => [jobsite.id, jobsite]))
 
   const binNumbers = (rows || []).map(binNumberFor).filter(Boolean)
-  const { data: activeRequests } = binNumbers.length > 0
-    ? await supabase
+  let activeRequests: any[] = []
+  if (binNumbers.length > 0) {
+    let activeRequestQuery = supabase
       .from('service_requests')
       .select('bin_number,status')
-      .eq('customer_id', user!.id)
       .in('bin_number', binNumbers)
       .in('status', ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'in_progress'])
-    : { data: [] }
+    activeRequestQuery = clientIds.length > 0
+      ? activeRequestQuery.or(`customer_id.eq.${user!.id},client_id.in.(${clientIds.join(',')})`)
+      : activeRequestQuery.eq('customer_id', user!.id)
+    const result = await activeRequestQuery
+    activeRequests = result.data || []
+  }
   const activeSwapBins = new Set((activeRequests || []).map((request: any) => request.bin_number).filter(Boolean))
 
   let items: CustomerBinItem[] = (rows || []).map((item: any) => {
@@ -113,9 +97,12 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
 
       <div className="space-y-4">
         {demoMode && (
-          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
-            Demo customer account: these sample jobsites and bins let you test customer swap requests before a real customer profile is linked.
-          </div>
+          <>
+            <CustomerAccessLink />
+            <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+              Demo customer account: these sample jobsites and bins let you test customer swap requests before a real customer profile is linked.
+            </div>
+          </>
         )}
         {items.length > 0 ? (
           <CustomerBinsList items={items} />

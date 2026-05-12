@@ -32,6 +32,8 @@ type ServiceRequest = {
   jobsite_address?: string | null
   service_address?: string | null
   bin_number?: string | null
+  pickup_bin_number?: string | null
+  delivery_bin_number?: string | null
   status?: string | null
   preferred_date?: string | null
   scheduled_date?: string | null
@@ -72,6 +74,10 @@ type SavedRouteStop = {
   service_request_id?: string | null
   address?: string | null
   bin_numbers?: string[] | null
+  pickup_bin_number?: string | null
+  delivery_bin_number?: string | null
+  landfill_location?: string | null
+  dropoff_address?: string | null
   stop_type?: string | null
   status?: string | null
   eta?: string | null
@@ -348,6 +354,7 @@ function noteField(notes: string | null | undefined, label: string) {
 function swapPlanFromNotes(notes?: string | null) {
   return {
     pickupBin: noteField(notes, 'Pickup bin'),
+    deliveryBin: noteField(notes, 'Delivery bin') || noteField(notes, 'Dropoff bin'),
     landfill: noteField(notes, 'Landfill'),
     dropoffJobsite: noteField(notes, 'Next jobsite'),
     dropoffAddress: noteField(notes, 'Dropoff address'),
@@ -365,7 +372,20 @@ function routeAddressesForStop(stop: Stop) {
 
 function binNumberForStop(stop: Stop) {
   const plan = swapPlanFromNotes(stop.request?.notes)
-  return plan.pickupBin || stop.request?.bin_number || stop.equipment.find(item => item.bin_number)?.bin_number || ''
+  return plan.pickupBin || stop.request?.pickup_bin_number || stop.request?.bin_number || stop.equipment.find(item => item.bin_number)?.bin_number || ''
+}
+
+function deliveryBinNumberForStop(stop: Stop) {
+  const plan = swapPlanFromNotes(stop.request?.notes)
+  return plan.deliveryBin || stop.request?.delivery_bin_number || ''
+}
+
+function routeBinNumbersForStop(stop: Stop) {
+  return [
+    binNumberForStop(stop),
+    deliveryBinNumberForStop(stop),
+    ...stop.equipment.map(item => item.bin_number).filter(Boolean),
+  ].filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
 }
 
 function isUuid(value: string) {
@@ -605,6 +625,7 @@ export default function RoutesPage() {
     jobsiteName: '',
     address: '',
     binNumber: '',
+    deliveryBinNumber: '',
     landfill: '',
     dropoffJobsite: '',
     dropoffAddress: '',
@@ -765,6 +786,7 @@ export default function RoutesPage() {
       `Manual dispatch entry.`,
       jobsiteName ? `Jobsite: ${jobsiteName}.` : '',
       manual.binNumber ? `Pickup bin: ${manual.binNumber}.` : '',
+      manual.deliveryBinNumber ? `Delivery bin: ${manual.deliveryBinNumber}.` : '',
       manual.landfill.trim() ? `Landfill: ${manual.landfill.trim()}.` : '',
       manual.dropoffJobsite.trim() ? `Next jobsite: ${manual.dropoffJobsite.trim()}.` : '',
       manual.dropoffAddress.trim() ? `Dropoff address: ${manual.dropoffAddress.trim()}.` : '',
@@ -786,7 +808,7 @@ export default function RoutesPage() {
       setLoading(false)
       return
     }
-    setManual({ jobsiteName: '', address: '', binNumber: '', landfill: '', dropoffJobsite: '', dropoffAddress: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
+    setManual({ jobsiteName: '', address: '', binNumber: '', deliveryBinNumber: '', landfill: '', dropoffJobsite: '', dropoffAddress: '', serviceType: 'swap', date: new Date().toISOString().slice(0, 10), notes: '' })
     setMessage('Manual dispatch stop added and routed.')
     await load()
   }
@@ -828,7 +850,7 @@ export default function RoutesPage() {
           address: addressFor(stop),
           lat: roughCoord(stop).lat,
           lng: roughCoord(stop).lng,
-          bin_numbers: stop.equipment.map(item => item.bin_number).filter(Boolean),
+          bin_numbers: routeBinNumbersForStop(stop),
           stop_type: routeStopType(stop),
           status: 'planned',
           eta: new Date(Date.now() + cumulativeMinutes * 60_000).toISOString(),
@@ -890,66 +912,95 @@ export default function RoutesPage() {
 
   const markStopInMotion = async (stop: Stop) => {
     const binNumber = binNumberForStop(stop)
-    if (!binNumber) {
-      setMessage('No bin number is attached to this stop, so inventory could not be updated.')
+    const deliveryBin = deliveryBinNumberForStop(stop)
+    if (!binNumber && !deliveryBin) {
+      setMessage('No pickup or delivery bin is attached to this stop, so inventory could not be updated.')
       return
     }
     const plan = swapPlanFromNotes(stop.request?.notes)
     const transitLocation = `In transit from ${stop.name || addressFor(stop)}${plan.landfill ? ` to ${plan.landfill}` : ''}`
     setMessage('')
-    const { error } = await supabase
-      .from('equipment')
-      .update({
-        status: 'in_transit',
-        location: transitLocation,
-        jobsite_id: null,
-        last_serviced_at: new Date().toISOString(),
-      })
-      .eq('bin_number', binNumber)
-    if (error) {
-      setMessage(`Could not mark bin #${binNumber} in motion: ${error.message}`)
-      return
+
+    for (const item of [
+      { bin: binNumber, location: transitLocation },
+      { bin: deliveryBin, location: `On truck to ${addressFor(stop)}` },
+    ]) {
+      if (!item.bin) continue
+      const { error } = await supabase
+        .from('equipment')
+        .update({
+          status: 'in_transit',
+          location: item.location,
+          jobsite_id: null,
+          last_serviced_at: new Date().toISOString(),
+        })
+        .eq('bin_number', item.bin)
+      if (error) {
+        setMessage(`Could not mark bin #${item.bin} in motion: ${error.message}`)
+        return
+      }
     }
     if (stop.request?.id) {
       await supabase
         .from('service_requests')
         .update({
           status: 'in_progress',
-          notes: [stop.request.notes, `Bin #${binNumber} picked up and marked in transit.`].filter(Boolean).join('\n'),
+          notes: [stop.request.notes, `Pickup bin #${binNumber || 'assigned'} and delivery bin #${deliveryBin || 'assigned'} marked in transit.`].filter(Boolean).join('\n'),
         })
         .eq('id', stop.request.id)
     }
-    setMessage(`Bin #${binNumber} is now in transit and removed from the old jobsite.`)
+    setMessage(`Swap inventory is now in transit. Pickup: ${binNumber || 'none'} | Delivery: ${deliveryBin || 'none'}.`)
     await load()
   }
 
   const completeStopInventory = async (stop: Stop) => {
     const binNumber = binNumberForStop(stop)
-    if (!binNumber) {
-      setMessage('No bin number is attached to this stop, so inventory could not be completed.')
+    const deliveryBin = deliveryBinNumberForStop(stop)
+    if (!binNumber && !deliveryBin) {
+      setMessage('No pickup or delivery bin is attached to this stop, so inventory could not be completed.')
       return
     }
     const plan = swapPlanFromNotes(stop.request?.notes)
     const serviceType = routeStopType(stop).toLowerCase()
-    const finalName = plan.dropoffJobsite || (serviceType === 'delivery' ? stop.name : '')
-    const finalAddress = plan.dropoffAddress || (serviceType === 'delivery' ? addressFor(stop) : '')
-    const finalLocation = finalAddress || finalName || HOME_BASE.address
-    const finalStatus = serviceType === 'pickup' && !plan.dropoffJobsite && !plan.dropoffAddress ? 'available' : 'deployed'
-    const finalJobsiteId = finalStatus === 'deployed' ? await findOrCreateDropoffJobsite(finalName, finalAddress) : null
+    const pickupFinalName = plan.dropoffJobsite || ''
+    const pickupFinalAddress = plan.dropoffAddress || ''
+    const pickupFinalLocation = pickupFinalAddress || pickupFinalName || plan.landfill || HOME_BASE.address
+    const pickupFinalStatus = pickupFinalName || pickupFinalAddress ? 'deployed' : serviceType === 'pickup' || deliveryBin ? 'available' : 'deployed'
+    const pickupFinalJobsiteId = pickupFinalStatus === 'deployed'
+      ? await findOrCreateDropoffJobsite(pickupFinalName || stop.name, pickupFinalAddress || addressFor(stop))
+      : null
 
     setMessage('')
-    const { error } = await supabase
-      .from('equipment')
-      .update({
-        status: finalStatus,
-        location: finalLocation,
-        jobsite_id: finalJobsiteId,
-        last_serviced_at: new Date().toISOString(),
-      })
-      .eq('bin_number', binNumber)
-    if (error) {
-      setMessage(`Could not complete bin #${binNumber}: ${error.message}`)
-      return
+    if (deliveryBin) {
+      const { error } = await supabase
+        .from('equipment')
+        .update({
+          status: 'deployed',
+          location: addressFor(stop),
+          jobsite_id: stop.request?.jobsite_id || (isUuid(stop.id) ? stop.id : null),
+          last_serviced_at: new Date().toISOString(),
+        })
+        .eq('bin_number', deliveryBin)
+      if (error) {
+        setMessage(`Could not complete delivery bin #${deliveryBin}: ${error.message}`)
+        return
+      }
+    }
+
+    if (binNumber && binNumber !== deliveryBin) {
+      const { error } = await supabase
+        .from('equipment')
+        .update({
+          status: pickupFinalStatus,
+          location: pickupFinalLocation,
+          jobsite_id: pickupFinalJobsiteId,
+          last_serviced_at: new Date().toISOString(),
+        })
+        .eq('bin_number', binNumber)
+      if (error) {
+        setMessage(`Could not complete pickup bin #${binNumber}: ${error.message}`)
+        return
+      }
     }
 
     if (stop.request?.id) {
@@ -959,14 +1010,14 @@ export default function RoutesPage() {
           status: 'completed',
           notes: [
             stop.request.notes,
-            `Completed inventory move for bin #${binNumber}. Final status: ${finalStatus}. Final location: ${finalLocation}.`,
+            `Completed swap inventory. Delivered ${deliveryBin ? `bin #${deliveryBin}` : 'assigned bin'} to ${addressFor(stop)}. Picked up ${binNumber ? `bin #${binNumber}` : 'assigned bin'} and moved it to ${pickupFinalLocation}.`,
           ].filter(Boolean).join('\n'),
         })
         .eq('id', stop.request.id)
       await supabase.from('route_stops').update({ status: 'completed' }).eq('service_request_id', stop.request.id)
     }
 
-    setMessage(`Bin #${binNumber} completed: ${finalStatus.replace(/_/g, ' ')} at ${finalLocation}.`)
+    setMessage(`Swap completed. Delivered ${deliveryBin || 'assigned bin'}; pickup bin ${binNumber || 'none'} moved to ${pickupFinalLocation}.`)
     await load()
   }
 
@@ -1013,6 +1064,11 @@ export default function RoutesPage() {
         action,
         eta_minutes: stop.eta_minutes || 35,
         final_location: stop.address,
+        pickup_bin_number: stop.pickup_bin_number || noteField(stop.notes, 'Pickup bin') || stop.bin_numbers?.[0],
+        delivery_bin_number: stop.delivery_bin_number || noteField(stop.notes, 'Delivery bin') || noteField(stop.notes, 'Dropoff bin') || stop.bin_numbers?.[1],
+        landfill: stop.landfill_location || noteField(stop.notes, 'Landfill'),
+        dropoff_jobsite: noteField(stop.notes, 'Next jobsite'),
+        dropoff_address: stop.dropoff_address || noteField(stop.notes, 'Dropoff address'),
         proof_notes: action === 'complete' ? `Completed by driver from route board at ${new Date().toLocaleString()}` : undefined,
       }),
     })
@@ -1187,6 +1243,10 @@ export default function RoutesPage() {
             <div className="md:w-36">
               <label className="block text-xs font-medium text-slate-400 mb-1">Pickup bin</label>
               <input className="input font-mono" value={manual.binNumber} onChange={event => setManual(prev => ({ ...prev, binNumber: event.target.value }))} placeholder="121872" />
+            </div>
+            <div className="md:w-36">
+              <label className="block text-xs font-medium text-slate-400 mb-1">Delivery bin</label>
+              <input className="input font-mono" value={manual.deliveryBinNumber} onChange={event => setManual(prev => ({ ...prev, deliveryBinNumber: event.target.value }))} placeholder="131074" />
             </div>
             <div className="md:w-40">
               <label className="block text-xs font-medium text-slate-400 mb-1">Service</label>

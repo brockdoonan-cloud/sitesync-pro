@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { captureAppException } from '@/lib/monitoring/sentry'
+import { getCustomerClientIds } from '@/lib/customer/access'
 
 const activeStatuses = ['pending', 'dispatch_ready', 'scheduled', 'confirmed', 'dispatched', 'en_route', 'arrived', 'in_progress', 'completed']
 
@@ -12,10 +13,14 @@ export async function GET() {
 
   const admin = createAdminClient() || supabase
   try {
+    const clientIds = await getCustomerClientIds(supabase, user)
+    const requestFilter = clientIds.length
+      ? `customer_id.eq.${user.id},client_id.in.(${clientIds.join(',')})`
+      : `customer_id.eq.${user.id}`
     const { data: requests, error } = await admin
       .from('service_requests')
       .select('*')
-      .eq('customer_id', user.id)
+      .or(requestFilter)
       .in('status', activeStatuses)
       .order('created_at', { ascending: false })
 

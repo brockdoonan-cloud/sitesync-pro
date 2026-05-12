@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import PaginationControls from '@/components/PaginationControls'
 import { paginate } from '@/lib/pagination'
+import CustomerAccessCodeButton from '@/components/operator/CustomerAccessCodeButton'
 
 export default async function ClientsPage({ searchParams }: { searchParams?: Promise<{ page?: string }> }) {
   const supabase = await createClient()
@@ -29,6 +30,7 @@ export default async function ClientsPage({ searchParams }: { searchParams?: Pro
               {client.phone && <div>Phone: {client.phone}</div>}
               {client.status && <div>Status: {client.status}</div>}
             </div>
+            <CustomerAccessCodeButton clientId={client.id} />
           </div>
         )) : <div className="card text-center py-12 md:col-span-2 xl:col-span-3"><p className="text-slate-400">No clients found.</p></div>}
       </div>

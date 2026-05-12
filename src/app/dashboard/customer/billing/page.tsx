@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type PriceLine, type ServiceCode } from '@/lib/pricing'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import CustomerAccessLink from '@/components/customer/CustomerAccessLink'
 
 type InvoiceRow = {
   id: string
+  client_id?: string | null
   invoice_number?: string | null
   client_name?: string | null
   customer_name?: string | null
@@ -17,6 +19,25 @@ type InvoiceRow = {
   invoice_date?: string | null
   service_date?: string | null
   notes?: string | null
+}
+
+function relationMissing(error: any) {
+  const message = String(error?.message || '')
+  return error?.code === '42P01' || /does not exist|schema cache/i.test(message)
+}
+
+function invoiceFilter(email: string, clientIds: string[]) {
+  const clauses: string[] = []
+  const cleanEmail = email.trim().toLowerCase()
+
+  if (cleanEmail) {
+    clauses.push(`email.eq.${cleanEmail}`, `client_email.eq.${cleanEmail}`)
+  }
+  if (clientIds.length) {
+    clauses.push(`client_id.in.(${clientIds.join(',')})`)
+  }
+
+  return clauses.length ? clauses.join(',') : 'id.is.null'
 }
 
 const demoItems = [
@@ -58,20 +79,37 @@ export default function CustomerBillingPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
+  const [showAccessLink, setShowAccessLink] = useState(false)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
       const { data: { user } } = await supabase.auth.getUser()
       try {
+        let linkedClientIds: string[] = []
+        if (user?.id) {
+          const { data: linkedAccounts, error: linkedError } = await supabase
+            .from('customer_accounts')
+            .select('client_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active')
+
+          if (linkedError && !relationMissing(linkedError)) throw linkedError
+          linkedClientIds = (linkedAccounts || []).map((row: any) => row.client_id).filter(Boolean)
+        }
+
         const rows = await fetchAllRows<InvoiceRow>((from, to) =>
-          supabase
+          {
+            const base = supabase
             .from('invoices')
-            .select('id,invoice_number,client_name,customer_name,total,amount,balance,status,invoice_date,service_date,notes,email,client_email')
-            .or(`email.eq.${user?.email || ''},client_email.eq.${user?.email || ''}`)
+            .select('id,client_id,invoice_number,client_name,customer_name,total,amount,balance,status,invoice_date,service_date,notes,email,client_email')
+            return base
+            .or(invoiceFilter(user?.email || '', linkedClientIds))
             .order('invoice_date', { ascending: false })
             .range(from, to)
+          }
         )
+        setShowAccessLink(linkedClientIds.length === 0 && rows.length === 0)
         setInvoices(rows.length ? rows : demoInvoices())
       } catch (err) {
         setMessage(err instanceof Error ? err.message : 'Could not load invoices.')
@@ -98,6 +136,7 @@ export default function CustomerBillingPage() {
       </div>
 
       {message && <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">{message}</div>}
+      {showAccessLink && <CustomerAccessLink />}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sky-300">
