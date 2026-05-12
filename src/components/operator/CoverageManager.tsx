@@ -18,6 +18,23 @@ type Division = {
 type ZipCoverage = { id: string; division_id: string; zip: string }
 type StateCoverage = { id: string; division_id: string; state_code: string }
 
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID',
+  'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS',
+  'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK',
+  'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV',
+  'WI', 'WY', 'DC', 'PR', 'VI', 'GU', 'MP', 'AS',
+]
+
+const VALID_STATES = new Set(US_STATES)
+
+const STATE_PRESETS = [
+  { label: 'Florida', states: ['FL'] },
+  { label: 'Southeast', states: ['FL', 'GA', 'AL', 'SC', 'NC', 'TN'] },
+  { label: 'Texas', states: ['TX'] },
+  { label: 'Nationwide', states: US_STATES },
+]
+
 function parseZips(input: string) {
   return [...new Set(
     input
@@ -32,8 +49,21 @@ function parseStates(input: string) {
     input
       .split(/[\s,;]+/)
       .map(value => value.trim().toUpperCase().slice(0, 2))
-      .filter(value => /^[A-Z]{2}$/.test(value))
+      .filter(value => VALID_STATES.has(value))
   )]
+}
+
+function findInvalidStates(input: string) {
+  return [...new Set(
+    input
+      .split(/[\s,;]+/)
+      .map(value => value.trim().toUpperCase().slice(0, 2))
+      .filter(value => value && /^[A-Z]{2}$/.test(value) && !VALID_STATES.has(value))
+  )]
+}
+
+function mergeStateText(current: string, additions: string[]) {
+  return [...new Set([...parseStates(current), ...additions])].join(', ')
 }
 
 export default function CoverageManager({
@@ -84,6 +114,24 @@ export default function CoverageManager({
     if (!states.error) setStateCoverage(states.data || [])
   }
 
+  const findInvalidZips = async (zips: string[]) => {
+    if (!zips.length) return []
+    const valid = new Set<string>()
+
+    for (let index = 0; index < zips.length; index += 500) {
+      const chunk = zips.slice(index, index + 500)
+      const { data, error } = await supabase
+        .from('zip_lookup')
+        .select('zip')
+        .in('zip', chunk)
+
+      if (error) throw error
+      for (const row of data || []) valid.add(row.zip)
+    }
+
+    return zips.filter(zip => !valid.has(zip))
+  }
+
   const createDivision = async () => {
     const name = newDivisionName.trim()
     if (!name) return
@@ -116,13 +164,31 @@ export default function CoverageManager({
     if (!selectedDivision) return
     const zips = parseZips(zipText)
     const states = parseStates(stateText)
+    const invalidStates = findInvalidStates(stateText)
     if (!zips.length && !states.length) {
       setMessage('Add at least one ZIP code or state code.')
+      return
+    }
+    if (invalidStates.length) {
+      setMessage(`Invalid state code${invalidStates.length === 1 ? '' : 's'}: ${invalidStates.join(', ')}`)
       return
     }
 
     setBusy(true)
     setMessage('')
+
+    try {
+      const invalidZips = await findInvalidZips(zips)
+      if (invalidZips.length) {
+        setBusy(false)
+        setMessage(`Invalid ZIP code${invalidZips.length === 1 ? '' : 's'}: ${invalidZips.slice(0, 10).join(', ')}${invalidZips.length > 10 ? ` + ${invalidZips.length - 10} more` : ''}`)
+        return
+      }
+    } catch (error: any) {
+      setBusy(false)
+      setMessage(error.message || 'Could not validate ZIP codes.')
+      return
+    }
 
     for (let index = 0; index < zips.length; index += 500) {
       const chunk = zips.slice(index, index + 500).map(zip => ({
@@ -221,7 +287,7 @@ export default function CoverageManager({
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {zipCoverage.filter(row => row.division_id === division.id).length} ZIPs · {stateCoverage.filter(row => row.division_id === division.id).length} states
+                    {zipCoverage.filter(row => row.division_id === division.id).length} ZIPs | {stateCoverage.filter(row => row.division_id === division.id).length} states
                   </div>
                 </button>
               ))}
@@ -288,9 +354,23 @@ export default function CoverageManager({
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    State Coverage
-                  </label>
+                  <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      State Coverage
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STATE_PRESETS.map(preset => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setStateText(current => mergeStateText(current, preset.states))}
+                          className="rounded-md border border-slate-700/60 px-2 py-1 text-[11px] font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-white"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <textarea
                     className="input min-h-44 resize-y"
                     value={stateText}
