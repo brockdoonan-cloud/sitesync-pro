@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
+import SiteDoctorPanel from '@/components/admin/SiteDoctorPanel'
 
 async function safeCount(admin: any, table: string, query?: (q: any) => any) {
   if (!admin) return 0
@@ -55,6 +56,8 @@ export default async function AdminDashboardPage() {
           </div>
         ))}
       </div>
+
+      <SiteDoctorPanel />
 
       <div className="card">
         <h2 className="font-semibold text-white mb-3">Recent Audit Log Entries</h2>

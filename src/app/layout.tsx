@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { LanguageProvider } from '@/lib/i18n'
 import GlobalLanguageToggle from '@/components/GlobalLanguageToggle'
+import SiteAssistant from '@/components/SiteAssistant'
 
 export const metadata: Metadata = {
   title: 'SiteSync Pro  Equipment Service Management',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-slate-950 text-white antialiased">
         <LanguageProvider>
           {children}
+          <SiteAssistant />
           <GlobalLanguageToggle />
         </LanguageProvider>
       </body>

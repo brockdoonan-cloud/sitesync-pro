@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
 
@@ -19,7 +20,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Operator access required.' }, { status: 403 })
   }
 
-  const supabase = await createClient()
+  const sessionClient = await createClient()
+  const admin = createAdminClient()
+  const supabase = admin || sessionClient
   const { data: lead, error: leadError } = await supabase
     .from('quote_requests')
     .select('*')
@@ -29,6 +32,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   if (leadError || !lead) {
     return NextResponse.json({ error: 'Lead not found or already deleted.' }, { status: 404 })
   }
+
+  await supabase.from('lead_division_matches').delete().eq('quote_request_id', id)
+  await supabase.from('quote_responses').delete().eq('quote_request_id', id)
+  await supabase.from('sms_logs').delete().eq('request_id', id)
 
   const { error } = await supabase
     .from('quote_requests')
