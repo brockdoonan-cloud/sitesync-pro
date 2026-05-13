@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calculatePrice, money, type ServiceCode } from '@/lib/pricing'
@@ -716,6 +717,7 @@ export default function BillingPage() {
         <div className="flex flex-col gap-2 sm:flex-row">
           <input type="date" className="input w-full sm:w-auto" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} />
           <input className="input w-full sm:w-64" placeholder="Search invoice, client, bin, address..." value={query} onChange={event => setQuery(event.target.value)} />
+          <Link href="/dashboard/operator/billing/profile-import" className="btn-secondary px-4 py-2 text-center">Import Profile</Link>
           <button onClick={load} className="btn-secondary px-4 py-2">Refresh</button>
           <button onClick={exportAuditDay} disabled={!displayInvoices.length && !visibleServices.length && !filteredDemoEvents.length} className="btn-primary px-4 py-2 disabled:opacity-50">Export Day</button>
         </div>

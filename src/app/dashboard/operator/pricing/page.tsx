@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_PRICING, calculatePrice, money, serviceLabel, type MileageBand, type ServiceCode } from '@/lib/pricing'
@@ -98,9 +99,12 @@ export default function PricingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Pricing Setup</h1>
-        <p className="text-slate-400 mt-1">Container rates, mileage rules, fuel surcharge, and customer-visible invoice breakdowns.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Pricing Setup</h1>
+          <p className="text-slate-400 mt-1">Container rates, mileage rules, fuel surcharge, and customer-visible invoice breakdowns.</p>
+        </div>
+        <Link href="/dashboard/operator/billing/profile-import" className="btn-secondary px-4 py-2 text-sm">Import Profile Sheet</Link>
       </div>
 
       {message && <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-300">{message}</div>}
