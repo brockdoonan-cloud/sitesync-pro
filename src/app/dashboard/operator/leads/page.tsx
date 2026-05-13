@@ -19,6 +19,15 @@ const SC: Record<string,{label:string;color:string;bg:string}> = {
   won:       {label:'Won',       color:'text-green-400',  bg:'bg-green-500/20 border-green-500/30'},
   lost:      {label:'Lost',      color:'text-slate-500',  bg:'bg-slate-700/40 border-slate-600/40'},
 }
+const HIDDEN_LEAD_STATUSES = new Set(['deleted', 'archived', 'spam'])
+
+function hideArchivedLeads(query: any) {
+  return query.neq('status', 'deleted').neq('status', 'archived').neq('status', 'spam')
+}
+
+function isVisibleLead(lead: Lead) {
+  return !HIDDEN_LEAD_STATUSES.has(String(lead.status || '').toLowerCase())
+}
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
@@ -90,11 +99,11 @@ export default function LeadsPage() {
       return scopedByCoverage && matchedLeadIds ? query.in('id', matchedLeadIds) : query
     }
 
-    let q = applyCoverageScope(supabase
+    let q = hideArchivedLeads(applyCoverageScope(supabase
       .from('quote_requests')
       .select('*', { count: 'exact' })
       .order('created_at',{ascending:false})
-      .range(pagination.from, pagination.to))
+      .range(pagination.from, pagination.to)))
     if (filter !== 'all') q = q.eq('status', filter)
     const [leadResult, open, contacted, quoted, won] = await Promise.all([
       q,
@@ -103,7 +112,7 @@ export default function LeadsPage() {
       applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'quoted'),
       applyCoverageScope(supabase.from('quote_requests').select('id', { count: 'exact', head: true })).eq('status', 'won'),
     ])
-    setLeads(leadResult.data || [])
+    setLeads((leadResult.data || []).filter(isVisibleLead))
     setTotal(leadResult.count || 0)
     setStatusCounts({
       open: open.count || 0,

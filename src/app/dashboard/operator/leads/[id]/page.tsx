@@ -31,6 +31,8 @@ type QuoteResponse = {
   created_at: string
 }
 
+const HIDDEN_LEAD_STATUSES = new Set(['deleted', 'archived', 'spam'])
+
 function money(value: number | string) {
   return Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
@@ -66,7 +68,8 @@ export default function LeadDetailPage() {
           : Promise.resolve({ data: null }),
       ])
 
-      setLead(leadData || null)
+      const leadIsHidden = HIDDEN_LEAD_STATUSES.has(String(leadData?.status || '').toLowerCase())
+      setLead(leadData && !leadIsHidden ? leadData : null)
       setExisting(responseData || null)
       if (responseData) {
         setPrice(String(responseData.price_quote || ''))

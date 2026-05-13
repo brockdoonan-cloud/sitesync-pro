@@ -9,6 +9,20 @@ type Params = { params: Promise<{ id: string }> }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
 
+function deletedLeadNotes(existingNotes: string | null | undefined, actor: string) {
+  const stamp = new Date().toISOString()
+  const deletionNote = `[${stamp}] Archived from operator inbox by ${actor}.`
+  return existingNotes ? `${existingNotes}\n\n${deletionNote}` : deletionNote
+}
+
+async function cleanupLeadIndexes(supabase: any, id: string) {
+  await Promise.all([
+    supabase.from('lead_division_matches').delete().eq('quote_request_id', id),
+    supabase.from('quote_responses').delete().eq('quote_request_id', id),
+    supabase.from('sms_logs').delete().eq('request_id', id),
+  ])
+}
+
 export async function DELETE(request: NextRequest, { params }: Params) {
   const { id } = await params
   if (!uuidPattern.test(id)) {
@@ -27,35 +41,48 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     .from('quote_requests')
     .select('*')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (leadError || !lead) {
     return NextResponse.json({ error: 'Lead not found or already deleted.' }, { status: 404 })
   }
 
-  await supabase.from('lead_division_matches').delete().eq('quote_request_id', id)
-  await supabase.from('quote_responses').delete().eq('quote_request_id', id)
-  await supabase.from('sms_logs').delete().eq('request_id', id)
-
-  const { error } = await supabase
+  const actor = org.user.email || org.user.id
+  const archivedNotes = deletedLeadNotes(lead.notes, actor)
+  const { data: archivedLead, error: archiveError } = await supabase
     .from('quote_requests')
-    .delete()
+    .update({ status: 'deleted', notes: archivedNotes })
     .eq('id', id)
+    .select('*')
+    .maybeSingle()
 
-  if (error) {
-    captureAppException(error, { route: '/api/quote-requests/[id]', organizationId: lead.organization_id, userId: org.user.id })
-    return NextResponse.json({ error: error.message || 'Could not delete lead.' }, { status: 500 })
+  if (archiveError || !archivedLead) {
+    const rpcResult = await sessionClient.rpc('archive_quote_request', { target_id: id })
+
+    if (rpcResult.error) {
+      captureAppException(archiveError || rpcResult.error, {
+        route: '/api/quote-requests/[id]',
+        organizationId: lead.organization_id,
+        userId: org.user.id,
+      })
+      return NextResponse.json({
+        error: archiveError?.message || rpcResult.error.message || 'Could not delete lead.',
+      }, { status: 500 })
+    }
+  } else {
+    await cleanupLeadIndexes(supabase, id)
   }
 
   await logAuditEvent({
     userId: org.user.id,
     orgId: lead.organization_id || org.organizationId,
-    action: 'delete',
+    action: 'archive',
     resourceType: 'quote_request',
     resourceId: id,
     beforeState: lead,
+    afterState: archivedLead || { id, status: 'deleted' },
     request,
   })
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, archived: true })
 }

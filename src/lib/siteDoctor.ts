@@ -99,6 +99,9 @@ export async function runSiteDoctor(admin: any, options: { repair?: boolean } = 
     .from('quote_requests')
     .select('id,name,email,notes')
     .or('name.ilike.%codex%,name.ilike.%demo%,email.ilike.%codex%,email.ilike.%demo%,notes.ilike.%Automated%')
+    .neq('status', 'deleted')
+    .neq('status', 'archived')
+    .neq('status', 'spam')
     .limit(200)
 
   if (demoError) {
@@ -118,21 +121,24 @@ export async function runSiteDoctor(admin: any, options: { repair?: boolean } = 
       await admin.from('lead_division_matches').delete().in('quote_request_id', ids)
       await admin.from('quote_responses').delete().in('quote_request_id', ids)
       await admin.from('sms_logs').delete().in('request_id', ids)
-      const { error } = await admin.from('quote_requests').delete().in('id', ids)
+      const { error } = await admin
+        .from('quote_requests')
+        .update({ status: 'deleted', notes: 'Archived by Site Doctor demo lead cleanup.' })
+        .in('id', ids)
       if (error) {
         checks.push({
           key: 'demo_leads_repair',
           label: 'Demo lead cleanup',
           status: 'fail',
           detail: error.message,
-          action: 'Delete demo leads manually from Supabase if this repeats.',
+          action: 'Archive demo leads manually from Supabase if this repeats.',
         })
       } else {
-        repairs.push(`Deleted ${ids.length} demo/smoke lead(s).`)
+        repairs.push(`Archived ${ids.length} demo/smoke lead(s).`)
         const demoCheck = checks.find(check => check.key === 'demo_leads')
         if (demoCheck) {
           demoCheck.status = 'ok'
-          demoCheck.detail = `Deleted ${ids.length} demo or smoke-test lead(s).`
+          demoCheck.detail = `Archived ${ids.length} demo or smoke-test lead(s).`
           demoCheck.action = undefined
         }
       }
