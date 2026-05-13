@@ -8,10 +8,11 @@ import { captureAppException } from '@/lib/monitoring/sentry'
 type Params = { params: Promise<{ id: string }> }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
+const archiveMarker = '[SiteSync archived from operator inbox]'
 
 function deletedLeadNotes(existingNotes: string | null | undefined, actor: string) {
   const stamp = new Date().toISOString()
-  const deletionNote = `[${stamp}] Archived from operator inbox by ${actor}.`
+  const deletionNote = `${archiveMarker} [${stamp}] Archived by ${actor}.`
   return existingNotes ? `${existingNotes}\n\n${deletionNote}` : deletionNote
 }
 
@@ -56,17 +57,32 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     .select('*')
     .maybeSingle()
 
+  let finalArchivedLead = archivedLead
+  let finalArchiveError = archiveError
+
   if (archiveError || !archivedLead) {
+    const fallback = await supabase
+      .from('quote_requests')
+      .update({ status: 'lost', notes: archivedNotes })
+      .eq('id', id)
+      .select('*')
+      .maybeSingle()
+
+    finalArchivedLead = fallback.data
+    finalArchiveError = fallback.error
+  }
+
+  if (finalArchiveError || !finalArchivedLead) {
     const rpcResult = await sessionClient.rpc('archive_quote_request', { target_id: id })
 
     if (rpcResult.error) {
-      captureAppException(archiveError || rpcResult.error, {
+      captureAppException(finalArchiveError || rpcResult.error, {
         route: '/api/quote-requests/[id]',
         organizationId: lead.organization_id,
         userId: org.user.id,
       })
       return NextResponse.json({
-        error: archiveError?.message || rpcResult.error.message || 'Could not delete lead.',
+        error: finalArchiveError?.message || rpcResult.error.message || 'Could not delete lead.',
       }, { status: 500 })
     }
   } else {
@@ -80,7 +96,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     resourceType: 'quote_request',
     resourceId: id,
     beforeState: lead,
-    afterState: archivedLead || { id, status: 'deleted' },
+    afterState: finalArchivedLead || { id, status: 'deleted' },
     request,
   })
 

@@ -20,13 +20,20 @@ const SC: Record<string,{label:string;color:string;bg:string}> = {
   lost:      {label:'Lost',      color:'text-slate-500',  bg:'bg-slate-700/40 border-slate-600/40'},
 }
 const HIDDEN_LEAD_STATUSES = new Set(['deleted', 'archived', 'spam'])
+const ARCHIVE_MARKER = '[SiteSync archived from operator inbox]'
 
 function hideArchivedLeads(query: any) {
   return query.neq('status', 'deleted').neq('status', 'archived').neq('status', 'spam')
 }
 
 function isVisibleLead(lead: Lead) {
-  return !HIDDEN_LEAD_STATUSES.has(String(lead.status || '').toLowerCase())
+  return !HIDDEN_LEAD_STATUSES.has(String(lead.status || '').toLowerCase()) && !String(lead.notes || '').includes(ARCHIVE_MARKER)
+}
+
+function archivedNotes(existingNotes?: string) {
+  const stamp = new Date().toISOString()
+  const note = `${ARCHIVE_MARKER} [${stamp}] Archived from operator inbox.`
+  return existingNotes ? `${existingNotes}\n\n${note}` : note
 }
 
 export default function LeadsPage() {
@@ -142,9 +149,16 @@ export default function LeadsPage() {
     setDeletingId('')
 
     if (!response.ok) {
-      setActionError(true)
-      setActionMessage(payload.error || 'Could not delete lead.')
-      return
+      const fallback = await supabase
+        .from('quote_requests')
+        .update({ status: 'lost', notes: archivedNotes(lead.notes) })
+        .eq('id', lead.id)
+
+      if (fallback.error) {
+        setActionError(true)
+        setActionMessage(payload.error || fallback.error.message || 'Could not delete lead.')
+        return
+      }
     }
 
     setSelected(current => current?.id === lead.id ? null : current)

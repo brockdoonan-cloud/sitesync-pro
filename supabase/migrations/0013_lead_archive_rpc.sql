@@ -29,10 +29,10 @@ begin
     from auth.users
     where id = auth.uid();
 
-  deletion_note := '[' || now()::text || '] Archived from operator inbox by ' || coalesce(actor_email, auth.uid()::text) || '.';
+  deletion_note := '[SiteSync archived from operator inbox] [' || now()::text || '] Archived by ' || coalesce(actor_email, auth.uid()::text) || '.';
 
   update public.quote_requests
-     set status = 'deleted',
+     set status = 'lost',
          notes = case
            when notes is null or notes = '' then deletion_note
            else notes || E'\n\n' || deletion_note

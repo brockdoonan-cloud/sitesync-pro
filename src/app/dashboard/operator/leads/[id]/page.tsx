@@ -32,6 +32,13 @@ type QuoteResponse = {
 }
 
 const HIDDEN_LEAD_STATUSES = new Set(['deleted', 'archived', 'spam'])
+const ARCHIVE_MARKER = '[SiteSync archived from operator inbox]'
+
+function archivedNotes(existingNotes?: string | null) {
+  const stamp = new Date().toISOString()
+  const note = `${ARCHIVE_MARKER} [${stamp}] Archived from operator inbox.`
+  return existingNotes ? `${existingNotes}\n\n${note}` : note
+}
 
 function money(value: number | string) {
   return Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -69,6 +76,7 @@ export default function LeadDetailPage() {
       ])
 
       const leadIsHidden = HIDDEN_LEAD_STATUSES.has(String(leadData?.status || '').toLowerCase())
+        || String(leadData?.notes || '').includes(ARCHIVE_MARKER)
       setLead(leadData && !leadIsHidden ? leadData : null)
       setExisting(responseData || null)
       if (responseData) {
@@ -118,9 +126,16 @@ export default function LeadDetailPage() {
     const payload = await response.json().catch(() => ({}))
 
     if (!response.ok) {
-      setDeleting(false)
-      setError(payload.error || 'Could not delete lead.')
-      return
+      const fallback = await supabase
+        .from('quote_requests')
+        .update({ status: 'lost', notes: archivedNotes(lead.notes) })
+        .eq('id', lead.id)
+
+      if (fallback.error) {
+        setDeleting(false)
+        setError(payload.error || fallback.error.message || 'Could not delete lead.')
+        return
+      }
     }
 
     router.push('/dashboard/operator/leads')
