@@ -18,14 +18,17 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null)
   const message = String(body?.message || '').slice(0, 800)
+  const language = body?.language === 'es' ? 'es' : 'en'
 
   try {
-    return NextResponse.json(answerSiteQuestion(message))
+    return NextResponse.json(answerSiteQuestion(message, language))
   } catch (error) {
     captureAppException(error, { route: '/api/assistant' })
     return NextResponse.json({
-      answer: 'I had trouble answering that. Try asking about quotes, swap requests, billing, tracking, or onboarding.',
-      links: [{ label: 'Dashboard', href: '/dashboard' }],
+      answer: language === 'es'
+        ? 'Tuve problemas para responder eso. Intenta preguntar sobre cotizaciones, cambios, facturación, rastreo o carga de datos.'
+        : 'I had trouble answering that. Try asking about quotes, swap requests, billing, tracking, or onboarding.',
+      links: [{ label: language === 'es' ? 'Panel' : 'Dashboard', href: '/dashboard' }],
     })
   }
 }
