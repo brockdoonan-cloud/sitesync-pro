@@ -3,11 +3,22 @@ export type ExtractedBillingTerm = {
   label: string
   source?: string
   confidence: 'high' | 'medium' | 'low'
+  enabled: boolean
+  chargeMode: BillingChargeMode
 }
+
+export type BillingChargeMode =
+  | 'per_service'
+  | 'per_pumpout'
+  | 'per_bin_month'
+  | 'percent_of_service'
+  | 'conditional'
+  | 'manual'
 
 export type ProfileSheetExtraction = {
   fileName: string
   sourceFilePath?: string | null
+  jobId?: string | null
   extractedAt: string
   customer: {
     legalBusinessName: string
@@ -62,6 +73,7 @@ export type ProfileSheetExtraction = {
     customerSignedDate: string
   }
   billingRules: BillingRule[]
+  feeSettings: Record<string, { enabled: boolean; chargeMode: BillingChargeMode }>
   preview: BillingPreview
   warnings: string[]
   sourceTextExcerpt: string
@@ -72,6 +84,8 @@ export type BillingRule = {
   chargeLabel: string
   rate: number
   unit: 'event' | 'bin_month' | 'percent' | 'flag'
+  enabled: boolean
+  chargeMode: BillingChargeMode
   description: string
 }
 

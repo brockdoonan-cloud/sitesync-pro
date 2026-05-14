@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { money } from '@/lib/pricing'
-import type { ProfileSheetExtraction } from '@/lib/billing/profileSheetTypes'
+import type { BillingChargeMode, ProfileSheetExtraction } from '@/lib/billing/profileSheetTypes'
 
 type PricingKey = keyof ProfileSheetExtraction['pricing']
 
@@ -26,6 +26,15 @@ const pricingFields: Array<{ key: PricingKey; label: string; suffix?: string }> 
   { key: 'weightTicketFee', label: 'Weight ticket' },
 ]
 
+const chargeModes: Array<{ value: BillingChargeMode; label: string }> = [
+  { value: 'per_service', label: 'Per drop/swap/pickup' },
+  { value: 'per_pumpout', label: 'Per pumpout' },
+  { value: 'per_bin_month', label: 'Monthly per bin' },
+  { value: 'percent_of_service', label: 'Percent surcharge' },
+  { value: 'conditional', label: 'Only when flagged' },
+  { value: 'manual', label: 'Manual only' },
+]
+
 function confidenceClass(value: string) {
   if (value === 'high') return 'border-green-500/30 bg-green-500/10 text-green-300'
   if (value === 'medium') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200'
@@ -40,6 +49,11 @@ function termValue(extraction: ProfileSheetExtraction, key: PricingKey, fallback
   return Number(extraction.pricing[key].value ?? fallback)
 }
 
+function isEnabled(extraction: ProfileSheetExtraction, key: PricingKey) {
+  const term = extraction.pricing[key]
+  return term.enabled !== false && Number(term.value ?? 0) > 0
+}
+
 function rebuildPreview(extraction: ProfileSheetExtraction): ProfileSheetExtraction {
   const serviceCount = 6
   const pumpouts = 1
@@ -50,14 +64,14 @@ function rebuildPreview(extraction: ProfileSheetExtraction): ProfileSheetExtract
   const environmentalRate = termValue(extraction, 'environmentalFee', 25)
   const surchargePct = termValue(extraction, 'fuelSurchargePercent', 0)
   const lines = [
-    { id: 'services', label: 'Drops / swaps / pickups', source: 'Driver closeouts and completed swap requests', quantity: serviceCount, rate: serviceRate, amount: Number((serviceCount * serviceRate).toFixed(2)) },
-    { id: 'pumpouts', label: 'Water pumpouts', source: 'Completed pumpout stops', quantity: pumpouts, rate: pumpoutRate, amount: Number((pumpouts * pumpoutRate).toFixed(2)) },
-    { id: 'monthly', label: 'Monthly bin usage', source: 'Active bins on site during the month', quantity: activeBins, rate: monthlyRate, amount: Number((activeBins * monthlyRate).toFixed(2)) },
-    { id: 'environmental', label: 'Environmental service fees', source: 'Per bin/service from profile sheet', quantity: serviceCount + pumpouts, rate: environmentalRate, amount: Number(((serviceCount + pumpouts) * environmentalRate).toFixed(2)) },
-  ]
+    isEnabled(extraction, 'oneBinService') ? { id: 'services', label: 'Drops / swaps / pickups', source: 'Driver closeouts and completed swap requests', quantity: serviceCount, rate: serviceRate, amount: Number((serviceCount * serviceRate).toFixed(2)) } : null,
+    isEnabled(extraction, 'waterPumpout') ? { id: 'pumpouts', label: 'Water pumpouts', source: 'Completed pumpout stops', quantity: pumpouts, rate: pumpoutRate, amount: Number((pumpouts * pumpoutRate).toFixed(2)) } : null,
+    isEnabled(extraction, 'monthlyUsage') ? { id: 'monthly', label: 'Monthly bin usage', source: 'Active bins on site during the month', quantity: activeBins, rate: monthlyRate, amount: Number((activeBins * monthlyRate).toFixed(2)) } : null,
+    isEnabled(extraction, 'environmentalFee') ? { id: 'environmental', label: 'Environmental service fees', source: 'Per bin/service from profile sheet', quantity: serviceCount + pumpouts, rate: environmentalRate, amount: Number(((serviceCount + pumpouts) * environmentalRate).toFixed(2)) } : null,
+  ].filter(Boolean) as ProfileSheetExtraction['preview']['lines']
   const serviceSubtotal = lines.filter(item => item.id !== 'monthly').reduce((sum, item) => sum + item.amount, 0)
   const recurringSubtotal = lines.find(item => item.id === 'monthly')?.amount || 0
-  const surchargeTotal = Number((serviceSubtotal * (surchargePct / 100)).toFixed(2))
+  const surchargeTotal = isEnabled(extraction, 'fuelSurchargePercent') ? Number((serviceSubtotal * (surchargePct / 100)).toFixed(2)) : 0
   if (surchargeTotal > 0) {
     lines.push({ id: 'fuel', label: `${surchargePct}% fuel surcharge`, source: 'Profile sheet fuel surcharge', quantity: 1, rate: surchargeTotal, amount: surchargeTotal })
   }
@@ -65,15 +79,18 @@ function rebuildPreview(extraction: ProfileSheetExtraction): ProfileSheetExtract
   return {
     ...extraction,
     billingRules: extraction.billingRules.map(rule => {
-      if (rule.eventType === 'delivery_completed' || rule.eventType === 'swap_completed' || rule.eventType === 'pickup_completed') return { ...rule, rate: serviceRate }
-      if (rule.eventType === 'monthly_usage') return { ...rule, rate: monthlyRate }
-      if (rule.eventType === 'water_pumpout_completed') return { ...rule, rate: pumpoutRate }
-      if (rule.eventType === 'environmental_service_fee') return { ...rule, rate: environmentalRate }
-      if (rule.eventType === 'fuel_surcharge') return { ...rule, rate: surchargePct }
-      if (rule.eventType === 'dead_run') return { ...rule, rate: termValue(extraction, 'deadRun', 0) }
-      if (rule.eventType === 'trash_or_overload') return { ...rule, rate: termValue(extraction, 'trashFee', termValue(extraction, 'overloadedFee', 0)) }
+      if (rule.eventType === 'delivery_completed' || rule.eventType === 'swap_completed' || rule.eventType === 'pickup_completed') return { ...rule, rate: serviceRate, enabled: extraction.pricing.oneBinService.enabled, chargeMode: extraction.pricing.oneBinService.chargeMode }
+      if (rule.eventType === 'monthly_usage') return { ...rule, rate: monthlyRate, enabled: extraction.pricing.monthlyUsage.enabled, chargeMode: extraction.pricing.monthlyUsage.chargeMode }
+      if (rule.eventType === 'water_pumpout_completed') return { ...rule, rate: pumpoutRate, enabled: extraction.pricing.waterPumpout.enabled, chargeMode: extraction.pricing.waterPumpout.chargeMode }
+      if (rule.eventType === 'environmental_service_fee') return { ...rule, rate: environmentalRate, enabled: extraction.pricing.environmentalFee.enabled, chargeMode: extraction.pricing.environmentalFee.chargeMode }
+      if (rule.eventType === 'fuel_surcharge') return { ...rule, rate: surchargePct, enabled: extraction.pricing.fuelSurchargePercent.enabled, chargeMode: extraction.pricing.fuelSurchargePercent.chargeMode }
+      if (rule.eventType === 'dead_run') return { ...rule, rate: termValue(extraction, 'deadRun', 0), enabled: extraction.pricing.deadRun.enabled, chargeMode: extraction.pricing.deadRun.chargeMode }
+      if (rule.eventType === 'trash_or_overload') return { ...rule, rate: termValue(extraction, 'trashFee', termValue(extraction, 'overloadedFee', 0)), enabled: extraction.pricing.trashFee.enabled || extraction.pricing.overloadedFee.enabled, chargeMode: 'conditional' }
       return rule
     }),
+    feeSettings: Object.fromEntries(
+      Object.entries(extraction.pricing).map(([key, term]) => [key, { enabled: term.enabled, chargeMode: term.chargeMode }])
+    ),
     preview: {
       periodLabel: 'Demo month preview',
       activity: { swaps: 3, drops: 2, pickups: 1, pumpouts, activeBins },
@@ -139,6 +156,33 @@ export default function ProfileSheetImportPage() {
     })
   }
 
+  const updateFeeEnabled = (key: PricingKey, enabled: boolean) => {
+    setExtraction(prev => prev ? rebuildPreview({
+      ...prev,
+      pricing: {
+        ...prev.pricing,
+        [key]: {
+          ...prev.pricing[key],
+          enabled,
+        },
+      },
+    }) : prev)
+  }
+
+  const updateChargeMode = (key: PricingKey, chargeMode: BillingChargeMode) => {
+    setExtraction(prev => prev ? rebuildPreview({
+      ...prev,
+      pricing: {
+        ...prev.pricing,
+        [key]: {
+          ...prev.pricing[key],
+          chargeMode,
+          enabled: chargeMode === 'manual' ? false : prev.pricing[key].enabled,
+        },
+      },
+    }) : prev)
+  }
+
   const updateCustomer = (key: keyof ProfileSheetExtraction['customer'], value: string) => {
     setExtraction(prev => prev ? { ...prev, customer: { ...prev.customer, [key]: value } } : prev)
   }
@@ -162,7 +206,8 @@ export default function ProfileSheetImportPage() {
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Could not save this profile sheet.')
       const warningText = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : ''
-      setMessage(`Saved client pricing profile${payload.pricingProfileId ? ` ${payload.pricingProfileId.slice(0, 8)}` : ''}.${warningText}`)
+      const jobText = payload.jobId ? ` Linked to job ${payload.jobId.slice(0, 8)}.` : ''
+      setMessage(`Saved client pricing profile${payload.pricingProfileId ? ` ${payload.pricingProfileId.slice(0, 8)}` : ''}.${jobText}${warningText}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this profile sheet.')
     } finally {
@@ -220,8 +265,8 @@ export default function ProfileSheetImportPage() {
 
             <div className="card space-y-4">
               <div>
-                <h2 className="font-semibold text-white">Jobsite</h2>
-                <p className="mt-1 text-xs text-slate-500">These details attach the pricing to the correct active project.</p>
+                <h2 className="font-semibold text-white">Project / Job File</h2>
+                <p className="mt-1 text-xs text-slate-500">The signed profile sheet is linked to this project so it can be pulled up later if pricing or authorization is disputed.</p>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input className="input sm:col-span-2" value={extraction.job.jobsiteName} onChange={event => updateJob('jobsiteName', event.target.value)} placeholder="Jobsite name" />
@@ -250,17 +295,31 @@ export default function ProfileSheetImportPage() {
               {pricingFields.map(field => {
                 const term = extraction.pricing[field.key]
                 return (
-                  <label key={field.key} className="space-y-1 rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
-                    <span className="flex items-center justify-between gap-2 text-xs text-slate-400">
-                      {field.label}
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase ${confidenceClass(term.confidence)}`}>{term.confidence}</span>
-                    </span>
+                  <div key={field.key} className="space-y-2 rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
+                    <div className="flex items-start justify-between gap-2 text-xs text-slate-400">
+                      <label className="flex min-w-0 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={term.enabled !== false}
+                          onChange={event => updateFeeEnabled(field.key, event.target.checked)}
+                        />
+                        <span>{field.label}</span>
+                      </label>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase ${confidenceClass(term.confidence)}`}>{term.confidence}</span>
+                    </div>
                     <div className="flex items-center gap-2">
                       {!field.suffix && <span className="text-slate-500">$</span>}
                       <input className="input" type="number" min="0" step="0.01" value={numberInputValue(term.value)} onChange={event => updatePricing(field.key, event.target.value)} />
                       {field.suffix && <span className="text-slate-500">{field.suffix}</span>}
                     </div>
-                  </label>
+                    <select
+                      className="input text-xs"
+                      value={term.chargeMode}
+                      onChange={event => updateChargeMode(field.key, event.target.value as BillingChargeMode)}
+                    >
+                      {chargeModes.map(mode => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+                    </select>
+                  </div>
                 )
               })}
             </div>
@@ -274,10 +333,13 @@ export default function ProfileSheetImportPage() {
               </div>
               <div className="space-y-2">
                 {extraction.billingRules.map(rule => (
-                  <div key={rule.eventType} className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2">
+                  <div key={rule.eventType} className={`rounded-lg border px-3 py-2 ${rule.enabled ? 'border-slate-700/50 bg-slate-900/40' : 'border-slate-800/60 bg-slate-950/40 opacity-60'}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-medium text-white">{rule.chargeLabel}</div>
-                      <div className="text-sm text-sky-300">{rule.unit === 'percent' ? `${rule.rate}%` : money(rule.rate)}</div>
+                      <div className="text-right">
+                        <div className="text-sm text-sky-300">{rule.unit === 'percent' ? `${rule.rate}%` : money(rule.rate)}</div>
+                        <div className="text-[10px] uppercase text-slate-500">{rule.enabled ? rule.chargeMode.replace(/_/g, ' ') : 'not charged'}</div>
+                      </div>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">{rule.description}</div>
                   </div>

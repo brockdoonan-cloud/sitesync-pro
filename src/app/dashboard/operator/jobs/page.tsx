@@ -19,8 +19,27 @@ type JobRow = {
   } | null
 }
 
+type AgreementRow = {
+  id: string
+  job_id?: string | null
+  file_name?: string | null
+  file_path?: string | null
+  customer_name?: string | null
+  job_name?: string | null
+  jobsite_address?: string | null
+  billing_rules?: Array<{ chargeLabel?: string; rate?: number; unit?: string; enabled?: boolean; chargeMode?: string }> | null
+  billing_preview?: { total?: number } | null
+  source_text_excerpt?: string | null
+  created_at?: string | null
+  signedUrl?: string | null
+}
+
 function titleize(value?: string | null) {
   return value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Service'
+}
+
+function money(value: unknown) {
+  return Number(value || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
 
 function dateAt(dayOffset: number, hour: number, minute = 0) {
@@ -139,11 +158,24 @@ export default async function OperatorJobsPage({ searchParams }: { searchParams?
   const supabase = await createClient()
   const resolvedSearchParams = await searchParams
   const pagination = paginate({ page: resolvedSearchParams?.page })
-  const { data: jobs, count } = await supabase
+  const [{ data: jobs, count }, agreementResult] = await Promise.all([
+    supabase
     .from('jobs')
     .select('*,service_requests(service_type,jobsite_address,profiles(full_name,company_name))', { count: 'exact' })
     .order('scheduled_date', { ascending: true })
-    .range(pagination.from, pagination.to)
+      .range(pagination.from, pagination.to),
+    supabase
+      .from('customer_profile_sheets')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(25),
+  ])
+  const agreementRows = (agreementResult.data || []) as AgreementRow[]
+  const agreements = await Promise.all(agreementRows.map(async agreement => {
+    if (!agreement.file_path) return { ...agreement, signedUrl: null }
+    const { data } = await supabase.storage.from('profile-sheets').createSignedUrl(agreement.file_path, 60 * 10)
+    return { ...agreement, signedUrl: data?.signedUrl || null }
+  }))
 
   const today = new Date().toISOString().split('T')[0]
   const liveJobs = (jobs || []) as JobRow[]
@@ -156,11 +188,64 @@ export default async function OperatorJobsPage({ searchParams }: { searchParams?
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-white">Jobs</h1>
-        <p className="text-slate-400 mt-1">Today&apos;s schedule and upcoming jobs</p>
+        <p className="text-slate-400 mt-1">Today&apos;s schedule, upcoming jobs, and signed project agreements</p>
         {fallbackJobs.length > 0 && (
           <p className="text-sky-300 text-sm mt-2">Demo schedule is showing because no live jobs are scheduled yet.</p>
         )}
       </div>
+
+      {agreements.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Project Agreements ({agreements.length})</h2>
+            <p className="text-xs text-slate-500">Profile sheets saved from billing import. Use these when a customer questions what was signed or which fees apply to a project.</p>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {agreements.map(agreement => {
+              const enabledRules = (agreement.billing_rules || []).filter(rule => rule.enabled !== false)
+              const disabledRules = (agreement.billing_rules || []).filter(rule => rule.enabled === false)
+              return (
+                <div key={agreement.id} className="card space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-white">{agreement.job_name || 'Project agreement'}</h3>
+                      <div className="mt-1 text-sm text-slate-400">{agreement.customer_name || 'Client not linked'}</div>
+                      <div className="text-xs text-slate-500">{agreement.jobsite_address || 'No jobsite address stored'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500">Preview total</div>
+                      <div className="text-lg font-bold text-white">{money(agreement.billing_preview?.total)}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {agreement.signedUrl && (
+                      <a href={agreement.signedUrl} target="_blank" rel="noreferrer" className="btn-primary px-3 py-1.5 text-xs">Open Signed Sheet</a>
+                    )}
+                    <span className="rounded-full border border-slate-700/60 bg-slate-900/50 px-3 py-1.5 text-xs text-slate-300">{agreement.file_name || 'Profile sheet'}</span>
+                    {agreement.job_id && <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-300">Job {agreement.job_id.slice(0, 8)}</span>}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2">
+                      <div className="text-xs font-semibold text-green-300">Charged fees</div>
+                      <div className="mt-1 text-xs text-slate-300">{enabledRules.length ? enabledRules.map(rule => rule.chargeLabel).join(', ') : 'None selected'}</div>
+                    </div>
+                    <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2">
+                      <div className="text-xs font-semibold text-slate-300">Not charged automatically</div>
+                      <div className="mt-1 text-xs text-slate-400">{disabledRules.length ? disabledRules.map(rule => rule.chargeLabel).join(', ') : 'No disabled fees'}</div>
+                    </div>
+                  </div>
+                  {agreement.source_text_excerpt && (
+                    <details className="rounded-lg border border-slate-700/50 bg-slate-900/40 px-3 py-2">
+                      <summary className="cursor-pointer text-sm font-medium text-sky-300">View extracted agreement text</summary>
+                      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-300">{agreement.source_text_excerpt}</pre>
+                    </details>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <div>
         <h2 className="text-lg font-semibold text-white mb-3">Today ({todaysJobs.length})</h2>

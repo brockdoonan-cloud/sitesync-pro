@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import type { BillingPreview, BillingPreviewLine, BillingRule, ExtractedBillingTerm, ProfileSheetExtraction } from './profileSheetTypes'
+import type { BillingChargeMode, BillingPreview, BillingPreviewLine, BillingRule, ExtractedBillingTerm, ProfileSheetExtraction } from './profileSheetTypes'
 
 const LABELS_THAT_END_VALUES = [
   'DIVISION',
@@ -137,13 +137,18 @@ function snippet(text: string, index: number) {
   return cleanLine(text.slice(start, index + 180))
 }
 
-function moneyTerm(text: string, label: string, patterns: RegExp[], fallback: number | null = null): ExtractedBillingTerm {
+function defaultEnabled(value: number | null, fallback: number | null, chargeMode: BillingChargeMode) {
+  if (chargeMode === 'manual') return false
+  return value !== null || fallback !== null
+}
+
+function moneyTerm(text: string, label: string, patterns: RegExp[], fallback: number | null = null, chargeMode: BillingChargeMode = 'conditional'): ExtractedBillingTerm {
   for (const pattern of patterns) {
     const match = pattern.exec(text)
     if (!match) continue
     const value = parseMoney(match[1])
     if (value !== null) {
-      return { value, label, source: snippet(text, match.index), confidence: 'high' }
+      return { value, label, source: snippet(text, match.index), confidence: 'high', enabled: defaultEnabled(value, fallback, chargeMode), chargeMode }
     }
   }
   return {
@@ -151,19 +156,21 @@ function moneyTerm(text: string, label: string, patterns: RegExp[], fallback: nu
     label,
     confidence: fallback === null ? 'low' : 'medium',
     source: fallback === null ? undefined : 'Defaulted from SiteSync standard pricing because the document did not include a clear value.',
+    enabled: defaultEnabled(null, fallback, chargeMode),
+    chargeMode,
   }
 }
 
-function percentTerm(text: string, label: string, patterns: RegExp[], fallback: number | null = null): ExtractedBillingTerm {
+function percentTerm(text: string, label: string, patterns: RegExp[], fallback: number | null = null, chargeMode: BillingChargeMode = 'percent_of_service'): ExtractedBillingTerm {
   for (const pattern of patterns) {
     const match = pattern.exec(text)
     if (!match) continue
     const value = Number(String(match[1]).replace(/[^\d.]/g, ''))
     if (Number.isFinite(value)) {
-      return { value, label, source: snippet(text, match.index), confidence: 'high' }
+      return { value, label, source: snippet(text, match.index), confidence: 'high', enabled: defaultEnabled(value, fallback, chargeMode), chargeMode }
     }
   }
-  return { value: fallback, label, confidence: fallback === null ? 'low' : 'medium' }
+  return { value: fallback, label, confidence: fallback === null ? 'low' : 'medium', enabled: defaultEnabled(null, fallback, chargeMode), chargeMode }
 }
 
 function line(id: string, label: string, source: string, quantity: number, rate: number): BillingPreviewLine {
@@ -181,14 +188,27 @@ function termValue(term: ExtractedBillingTerm, fallback = 0) {
   return Number(term.value ?? fallback)
 }
 
+function termEnabled(term: ExtractedBillingTerm) {
+  return term.enabled !== false && Number(term.value ?? 0) > 0
+}
+
+function feeSettingsFromPricing(pricing: ProfileSheetExtraction['pricing']) {
+  return Object.fromEntries(
+    Object.entries(pricing).map(([key, term]) => [key, { enabled: term.enabled, chargeMode: term.chargeMode }])
+  )
+}
+
 export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pricing'>): BillingRule[] {
   const pricing = extraction.pricing
+  const trashOrOverloadRate = termEnabled(pricing.trashFee) ? termValue(pricing.trashFee) : termValue(pricing.overloadedFee)
   const rules: BillingRule[] = [
     {
       eventType: 'delivery_completed',
       chargeLabel: 'Bin drop',
       rate: termValue(pricing.oneBinService),
       unit: 'event',
+      enabled: pricing.oneBinService.enabled,
+      chargeMode: pricing.oneBinService.chargeMode,
       description: 'Applied whenever a driver completes a bin delivery.',
     },
     {
@@ -196,6 +216,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Bin swap',
       rate: termValue(pricing.oneBinService),
       unit: 'event',
+      enabled: pricing.oneBinService.enabled,
+      chargeMode: pricing.oneBinService.chargeMode,
       description: 'Applied whenever a driver completes a swap and closes the stop.',
     },
     {
@@ -203,6 +225,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Bin pickup',
       rate: termValue(pricing.oneBinService),
       unit: 'event',
+      enabled: pricing.oneBinService.enabled,
+      chargeMode: pricing.oneBinService.chargeMode,
       description: 'Applied when a final pickup is completed.',
     },
     {
@@ -210,6 +234,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Monthly bin usage',
       rate: termValue(pricing.monthlyUsage),
       unit: 'bin_month',
+      enabled: pricing.monthlyUsage.enabled,
+      chargeMode: pricing.monthlyUsage.chargeMode,
       description: 'Applied once per active bin on site for the billing month.',
     },
     {
@@ -217,6 +243,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Water pumpout',
       rate: termValue(pricing.waterPumpout),
       unit: 'event',
+      enabled: pricing.waterPumpout.enabled,
+      chargeMode: pricing.waterPumpout.chargeMode,
       description: 'Applied when a pumpout is completed.',
     },
     {
@@ -224,6 +252,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Environmental service fee',
       rate: termValue(pricing.environmentalFee),
       unit: 'event',
+      enabled: pricing.environmentalFee.enabled,
+      chargeMode: pricing.environmentalFee.chargeMode,
       description: 'Applied to each billable service event.',
     },
     {
@@ -231,6 +261,8 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Fuel surcharge',
       rate: termValue(pricing.fuelSurchargePercent),
       unit: 'percent',
+      enabled: pricing.fuelSurchargePercent.enabled,
+      chargeMode: pricing.fuelSurchargePercent.chargeMode,
       description: 'Calculated as a percent of service and environmental charges.',
     },
     {
@@ -238,13 +270,17 @@ export function buildBillingRules(extraction: Pick<ProfileSheetExtraction, 'pric
       chargeLabel: 'Dead run',
       rate: termValue(pricing.deadRun),
       unit: 'flag',
+      enabled: pricing.deadRun.enabled,
+      chargeMode: pricing.deadRun.chargeMode,
       description: 'Applied when the driver cannot complete the service due to site conditions.',
     },
     {
       eventType: 'trash_or_overload',
       chargeLabel: 'Trash or overload fee',
-      rate: termValue(pricing.trashFee || pricing.overloadedFee),
+      rate: trashOrOverloadRate,
       unit: 'flag',
+      enabled: pricing.trashFee.enabled || pricing.overloadedFee.enabled,
+      chargeMode: 'conditional',
       description: 'Applied when unauthorized material or overloaded concrete is documented.',
     },
   ]
@@ -256,21 +292,22 @@ export function buildBillingPreview(extraction: Pick<ProfileSheetExtraction, 'pr
   const serviceCount = 6
   const pumpouts = 1
   const activeBins = 4
-  const serviceRate = termValue(extraction.pricing.oneBinService, 395)
-  const pumpoutRate = termValue(extraction.pricing.waterPumpout, serviceRate)
-  const monthlyRate = termValue(extraction.pricing.monthlyUsage, 150)
-  const environmentalRate = termValue(extraction.pricing.environmentalFee, 25)
-  const surchargePct = termValue(extraction.pricing.fuelSurchargePercent, 0)
+  const pricing = extraction.pricing
+  const serviceRate = termValue(pricing.oneBinService, 395)
+  const pumpoutRate = termValue(pricing.waterPumpout, serviceRate)
+  const monthlyRate = termValue(pricing.monthlyUsage, 150)
+  const environmentalRate = termValue(pricing.environmentalFee, 25)
+  const surchargePct = termValue(pricing.fuelSurchargePercent, 0)
 
   const lines = [
-    line('services', 'Drops / swaps / pickups', 'Driver closeouts and completed swap requests', serviceCount, serviceRate),
-    line('pumpouts', 'Water pumpouts', 'Completed pumpout stops', pumpouts, pumpoutRate),
-    line('monthly', 'Monthly bin usage', 'Active bins on site during the month', activeBins, monthlyRate),
-    line('environmental', 'Environmental service fees', 'Per bin/service from profile sheet', serviceCount + pumpouts, environmentalRate),
-  ]
+    termEnabled(pricing.oneBinService) ? line('services', 'Drops / swaps / pickups', 'Driver closeouts and completed swap requests', serviceCount, serviceRate) : null,
+    termEnabled(pricing.waterPumpout) ? line('pumpouts', 'Water pumpouts', 'Completed pumpout stops', pumpouts, pumpoutRate) : null,
+    termEnabled(pricing.monthlyUsage) ? line('monthly', 'Monthly bin usage', 'Active bins on site during the month', activeBins, monthlyRate) : null,
+    termEnabled(pricing.environmentalFee) ? line('environmental', 'Environmental service fees', 'Per bin/service from profile sheet', serviceCount + pumpouts, environmentalRate) : null,
+  ].filter(Boolean) as BillingPreviewLine[]
   const serviceSubtotal = lines.filter(item => item.id !== 'monthly').reduce((sum, item) => sum + item.amount, 0)
   const recurringSubtotal = lines.find(item => item.id === 'monthly')?.amount || 0
-  const surchargeTotal = Number((serviceSubtotal * (surchargePct / 100)).toFixed(2))
+  const surchargeTotal = termEnabled(pricing.fuelSurchargePercent) ? Number((serviceSubtotal * (surchargePct / 100)).toFixed(2)) : 0
 
   if (surchargeTotal > 0) {
     lines.push({
@@ -322,26 +359,27 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
   const billingContactPhone = valueAfter(customerLines, ["BILLING CONTACT'S PHONE NUMBER", 'BILLING CONTACTS PHONE NUMBER'])
 
   const pricing = {
-    oneBinService: moneyTerm(normalized, 'Using 1 bin at a time', [/USING\s+1\s+BIN\s+AT\s+A\s+TIME[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 395),
-    twoBinService: moneyTerm(normalized, 'Using 2 bins at a time', [/USING\s+2\s+BINS[\s\S]{0,160}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    waterPumpout: moneyTerm(normalized, 'Bin pumpout - water', [/BIN\s+PUMPOUT\s*-\s*WATER[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    slurryPumpout: moneyTerm(normalized, 'Bin pumpout - slurry / paint', [/BIN\s+PUMPOUT\s*-\s*SLURRY[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    trashFee: moneyTerm(normalized, 'Trash or unauthorized materials', [/TRASH\s+OR\s+OTHER\s+UNAUTHORIZED\s+MATERIALS[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    deadRun: moneyTerm(normalized, 'Dead run', [/DEAD\s+RUN[\s\S]{0,40}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    relocate: moneyTerm(normalized, 'Bin relocate', [/BIN\s+RELOCATE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    onsiteRelocate: moneyTerm(normalized, 'Onsite relocation', [/RELOCATION\s+if\s+onsite[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    sameDayWeekendFee: moneyTerm(normalized, 'Same day / nights / weekends', [/SAME\s+DAY[\s\S]{0,100}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    monthlyUsage: moneyTerm(normalized, 'Monthly bin usage fee', [/BIN\s+USAGE\s+FEE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 150),
-    environmentalFee: moneyTerm(normalized, 'Environmental service fee', [/ENVIRONMENTAL\s+SERVICE\s+FEE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 25),
+    oneBinService: moneyTerm(normalized, 'Using 1 bin at a time', [/USING\s+1\s+BIN\s+AT\s+A\s+TIME[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 395, 'per_service'),
+    twoBinService: moneyTerm(normalized, 'Using 2 bins at a time', [/USING\s+2\s+BINS[\s\S]{0,160}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_service'),
+    waterPumpout: moneyTerm(normalized, 'Bin pumpout - water', [/BIN\s+PUMPOUT\s*-\s*WATER[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_pumpout'),
+    slurryPumpout: moneyTerm(normalized, 'Bin pumpout - slurry / paint', [/BIN\s+PUMPOUT\s*-\s*SLURRY[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_pumpout'),
+    trashFee: moneyTerm(normalized, 'Trash or unauthorized materials', [/TRASH\s+OR\s+OTHER\s+UNAUTHORIZED\s+MATERIALS[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    deadRun: moneyTerm(normalized, 'Dead run', [/DEAD\s+RUN[\s\S]{0,40}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    relocate: moneyTerm(normalized, 'Bin relocate', [/BIN\s+RELOCATE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    onsiteRelocate: moneyTerm(normalized, 'Onsite relocation', [/RELOCATION\s+if\s+onsite[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    sameDayWeekendFee: moneyTerm(normalized, 'Same day / nights / weekends', [/SAME\s+DAY[\s\S]{0,100}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    monthlyUsage: moneyTerm(normalized, 'Monthly bin usage fee', [/BIN\s+USAGE\s+FEE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 150, 'per_bin_month'),
+    environmentalFee: moneyTerm(normalized, 'Environmental service fee', [/ENVIRONMENTAL\s+SERVICE\s+FEE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 25, 'per_service'),
     fuelSurchargePercent: percentTerm(normalized, 'Fuel surcharge percent', [/FUEL\s+SURCHARGE[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*%/i], 0),
-    overloadedFee: moneyTerm(normalized, 'Container overloaded fee', [/CONTAINER\s+OVERLOADED[\s\S]{0,120}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    standbyThirtyToFortyFive: moneyTerm(normalized, 'Stand-by 31-45 minutes', [/31\s*-\s*45\s+min\w*[\s\S]{0,60}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    standbyFortySixToSixty: moneyTerm(normalized, 'Stand-by 46-60 minutes', [/46\s*-\s*60\s+min\w*[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
-    weightTicketFee: moneyTerm(normalized, 'Weight ticket fee', [/WEIGHT\s+TICKET[\s\S]{0,160}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null),
+    overloadedFee: moneyTerm(normalized, 'Container overloaded fee', [/CONTAINER\s+OVERLOADED[\s\S]{0,120}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    standbyThirtyToFortyFive: moneyTerm(normalized, 'Stand-by 31-45 minutes', [/31\s*-\s*45\s+min\w*[\s\S]{0,60}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    standbyFortySixToSixty: moneyTerm(normalized, 'Stand-by 46-60 minutes', [/46\s*-\s*60\s+min\w*[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
+    weightTicketFee: moneyTerm(normalized, 'Weight ticket fee', [/WEIGHT\s+TICKET[\s\S]{0,160}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
   }
 
   const extraction: ProfileSheetExtraction = {
     fileName,
+    jobId: null,
     extractedAt: new Date().toISOString(),
     customer: {
       legalBusinessName: valueAfter(customerLines, ['LEGAL COMPANY NAME']),
@@ -379,6 +417,7 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
       customerSignedDate: valueAfter(lines.slice(Math.max(0, findIndex(lines, ['AUTHORIZED CUSTOMER']) + 1)), ['DATE']),
     },
     billingRules: [],
+    feeSettings: {},
     preview: {
       periodLabel: '',
       activity: { swaps: 0, drops: 0, pickups: 0, pumpouts: 0, activeBins: 0 },
@@ -400,6 +439,7 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
   if (pricing.twoBinService.value === null) extraction.warnings.push('Two-bin same-trip pricing was not found. The system will bill single-bin rates unless an operator sets this manually.')
 
   extraction.billingRules = buildBillingRules(extraction)
+  extraction.feeSettings = feeSettingsFromPricing(extraction.pricing)
   extraction.preview = buildBillingPreview(extraction)
 
   if (pricing.standbyFortySixToSixty.value !== null && pricing.standbyThirtyToFortyFive.value !== null) {
