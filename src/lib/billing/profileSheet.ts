@@ -1,6 +1,18 @@
 import JSZip from 'jszip'
 import type { BillingChargeMode, BillingPreview, BillingPreviewLine, BillingRule, ExtractedBillingTerm, ProfileSheetExtraction } from './profileSheetTypes'
 
+type AnthropicTextPart = {
+  type: 'text'
+  text: string
+}
+
+type AnthropicResponse = {
+  content?: Array<AnthropicTextPart | Record<string, unknown>>
+  error?: {
+    message?: string
+  }
+}
+
 const LABELS_THAT_END_VALUES = [
   'DIVISION',
   'JOBSITE INFORMATION',
@@ -61,6 +73,77 @@ function normalizeText(value: string) {
     .replace(/[\u2013\u2014]/g, '-')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+/g, ' ')
+}
+
+function toNodeBuffer(buffer: ArrayBuffer | Buffer) {
+  return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
+}
+
+function hasUsableAgreementText(text: string) {
+  const compact = text.replace(/\s+/g, ' ').trim()
+  if (compact.length < 80) return false
+  return /(customer profile|pricing information|jobsite|billing email|bin drop|bin pumpout|fuel surcharge|authorized signatures|legal company name)/i.test(compact)
+}
+
+async function extractTextWithAnthropic(
+  buffer: ArrayBuffer | Buffer,
+  options: { fileName: string; mediaType: string; contentType: 'document' | 'image' }
+) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    throw new Error('This file appears to be scanned or image-based and needs OCR. Add ANTHROPIC_API_KEY in Vercel to import scanned PDFs/images, or upload a text-based PDF/DOCX.')
+  }
+
+  const base64 = toNodeBuffer(buffer).toString('base64')
+  const contentBlock = options.contentType === 'document'
+    ? { type: 'document', source: { type: 'base64', media_type: options.mediaType, data: base64 } }
+    : { type: 'image', source: { type: 'base64', media_type: options.mediaType, data: base64 } }
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'anthropic-version': '2023-06-01',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+      max_tokens: 6000,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            contentBlock,
+            {
+              type: 'text',
+              text: [
+                `Transcribe ${options.fileName} as clean plain text for SiteSync Pro billing import.`,
+                'This is a customer profile sheet, signed pricing agreement, or job paperwork for an equipment/container rental company.',
+                'Preserve labels, dollar amounts, checkboxes, addresses, emails, phone numbers, job names, PO numbers, signatures, dates, and fee wording.',
+                'Return only the plain text from the document. Do not summarize and do not add markdown.',
+              ].join('\n'),
+            },
+          ],
+        },
+      ],
+    }),
+  })
+
+  const payload = await response.json().catch(() => ({})) as AnthropicResponse
+  if (!response.ok) {
+    throw new Error(payload.error?.message || 'OCR extraction failed. Try again or upload a text-based PDF/DOCX.')
+  }
+
+  const text = (payload.content || [])
+    .filter((part): part is AnthropicTextPart => part.type === 'text' && typeof part.text === 'string')
+    .map(part => part.text)
+    .join('\n')
+
+  if (!text.trim()) {
+    throw new Error('OCR extraction did not return readable text. Try a clearer scan or upload the original DOCX/PDF.')
+  }
+
+  return normalizeText(text)
 }
 
 function looksLikeLabel(value: string) {
@@ -347,6 +430,22 @@ export async function extractDocxText(buffer: ArrayBuffer | Buffer) {
   }))
 
   return normalizeText(decodeXml(parts.join('\n')))
+}
+
+export async function extractPdfText(buffer: ArrayBuffer | Buffer, fileName = 'profile-sheet.pdf') {
+  const { default: pdfParse } = await import('pdf-parse')
+  const parsed = await pdfParse(toNodeBuffer(buffer))
+  const text = normalizeText(parsed.text || '')
+  if (hasUsableAgreementText(text)) return text
+  return extractTextWithAnthropic(buffer, { fileName, mediaType: 'application/pdf', contentType: 'document' })
+}
+
+export async function extractImageText(buffer: ArrayBuffer | Buffer, mediaType: string, fileName = 'profile-sheet-image') {
+  return extractTextWithAnthropic(buffer, { fileName, mediaType, contentType: 'image' })
+}
+
+export function extractPlainText(buffer: ArrayBuffer | Buffer) {
+  return normalizeText(toNodeBuffer(buffer).toString('utf8'))
 }
 
 export function extractProfileSheetTerms(text: string, fileName: string): ProfileSheetExtraction {

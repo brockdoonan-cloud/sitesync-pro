@@ -241,9 +241,9 @@ export default function ProfileSheetImportPage() {
         }}
         className={`block cursor-pointer rounded-2xl border border-dashed px-6 py-10 text-center transition-colors ${dragging ? 'border-sky-300 bg-sky-500/20' : 'border-sky-500/40 bg-sky-500/10 hover:border-sky-400'}`}
       >
-        <input type="file" accept=".docx" className="hidden" onChange={event => upload(event.target.files?.[0])} />
-        <div className="text-lg font-semibold text-white">{loading ? 'Reading profile sheet...' : 'Drop customer profile sheet here'}</div>
-        <div className="mt-2 text-sm text-slate-400">DOCX supported. The system extracts customer info, jobsite, swap pricing, monthly usage, environmental fee, fuel surcharge, standby, and special charges.</div>
+        <input type="file" accept=".docx,.pdf,.txt,.text,.md,.csv,.jpg,.jpeg,.png,.webp" className="hidden" onChange={event => upload(event.target.files?.[0])} />
+        <div className="text-lg font-semibold text-white">{loading ? 'Reading profile sheet...' : 'Drop customer profile sheet or signed agreement here'}</div>
+        <div className="mt-2 text-sm text-slate-400">Upload from anywhere on this computer. Supports DOCX, text-based PDF, TXT/CSV, and scanned PDFs/images when OCR is enabled. The system extracts customer info, jobsite, swap pricing, monthly usage, environmental fee, fuel surcharge, standby, and special charges.</div>
       </label>
 
       {extraction && (
