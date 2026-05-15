@@ -4,7 +4,15 @@
 
 Supabase Free projects do not include daily automated backups. Supabase Pro includes daily automated backups and point-in-time recovery options depending on configuration.
 
-TODO before launch: upgrade the production Supabase project to Pro and confirm daily backups are enabled before onboarding paying operators.
+Launch requirement: upgrade the production Supabase project to Pro and confirm daily backups are enabled before onboarding paying operators.
+
+Production project: `odviemgfhdmskhvdgjvy`.
+
+Pre-hardening baseline snapshot:
+
+- Status: dashboard action required
+- Timestamp to record: after taking the snapshot in Supabase Dashboard > Database > Backups
+- Reason: the Codex runtime could not reach Supabase's direct Postgres host from this network, so the baseline snapshot must be initiated in the Supabase dashboard.
 
 ## Manual Backup
 
@@ -37,6 +45,23 @@ Never commit database dumps to GitHub. Store them in a private, access-controlle
 6. Validate organizations, clients, equipment, jobsites, service requests, invoices, and audit logs.
 7. If the temporary restore is clean, promote it or restore production from the snapshot.
 8. Rotate exposed keys if the incident involved secrets.
+
+## Restore Drill Log
+
+Run this drill before first real operator onboarding:
+
+1. Take a manual production snapshot.
+2. Restore it to a scratch Supabase project.
+3. Verify table counts for `clients`, `equipment`, `jobsites`, `service_requests`, `driver_routes`, `route_stops`, `billing_events`, `customer_profile_sheets`, and `audit_logs`.
+4. Verify private storage buckets exist and note that database snapshots do not guarantee application-level validation of storage file contents.
+5. Delete the scratch project after verification.
+6. Record time-to-restore here.
+
+Latest drill:
+
+- Status: pending dashboard execution
+- Time-to-restore: pending
+- Scratch project: pending
 
 Screenshot placeholders:
 
@@ -112,6 +137,16 @@ Expected healthy response:
 }
 ```
 
+## Sentry Alerts
+
+Create these rules in Sentry project `sitesync-pro/sitesync-pro`:
+
+1. Event frequency: when more than 10 events occur in 1 minute in production, email `brock.doonan@gmail.com`.
+2. New issue: when a new issue first appears in production, email `brock.doonan@gmail.com`.
+3. Aging unresolved issue: when an issue remains unresolved for 24 hours and has more than 50 occurrences, email `brock.doonan@gmail.com`.
+
+The Site Doctor reads recent events through `SENTRY_API_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`. Alert delivery is still configured in Sentry's dashboard, not in application code.
+
 ## Pre-Onboarding Checklist
 
 Before importing a new operator with hundreds of trucks or thousands of containers:
@@ -125,6 +160,6 @@ Before importing a new operator with hundreds of trucks or thousands of containe
 
 ## Dependency Security Notes
 
-`next` was upgraded to the patched `14.2.35` line in Phase 2. `npm audit` still reports advisories that require a major Next upgrade to fully clear. Treat a Next 15/16 upgrade as a separate compatibility project because it can affect routing, server components, middleware, and Sentry instrumentation.
+`next` is now on the 16.x line. Continue testing App Router, middleware, Sentry, and Supabase SSR behavior after every Next upgrade.
 
-`xlsx` is used for operator-uploaded Excel imports and currently has upstream advisories with no safe drop-in patch from npm audit. Phase 2 adds file type and 25 MB size validation, but before self-serve public imports you should replace `xlsx` with a maintained parser or move parsing into a sandboxed server job.
+Excel profile sheet parsing uses `read-excel-file` for profile imports. Keep uploaded document parsing server-side, preserve file-size limits, and avoid exposing service-role keys or parsed private documents to client components.

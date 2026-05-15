@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
-import { extractDocxText, extractImageText, extractPdfText, extractPlainText, extractProfileSheetTerms } from '@/lib/billing/profileSheet'
+import { extractDocxText, extractImageText, extractPdfText, extractPlainText, extractProfileSheetTerms, extractXlsxText } from '@/lib/billing/profileSheet'
 import { captureAppException } from '@/lib/monitoring/sentry'
 import { createClient } from '@/lib/supabase/server'
+import { getClientIp } from '@/lib/request'
+import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 
-const MAX_FILE_BYTES = 25 * 1024 * 1024
-const SUPPORTED_EXTENSIONS = new Set(['docx', 'pdf', 'txt', 'text', 'md', 'csv', 'jpg', 'jpeg', 'png', 'webp'])
+const MAX_FILE_BYTES = 30 * 1024 * 1024
+const SUPPORTED_EXTENSIONS = new Set(['docx', 'pdf', 'txt', 'text', 'md', 'csv', 'xlsx', 'jpg', 'jpeg', 'png', 'webp'])
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -17,6 +19,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   text: 'text/plain',
   md: 'text/markdown',
   csv: 'text/csv',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
@@ -30,6 +33,7 @@ function isFile(value: FormDataEntryValue | null): value is File {
 async function extractTextForFile(buffer: ArrayBuffer, extension: string, mediaType: string, fileName: string) {
   if (extension === 'docx') return extractDocxText(buffer)
   if (extension === 'pdf') return extractPdfText(buffer, fileName)
+  if (extension === 'xlsx') return extractXlsxText(buffer)
   if (IMAGE_EXTENSIONS.has(extension)) return extractImageText(buffer, mediaType, fileName)
   return extractPlainText(buffer)
 }
@@ -41,6 +45,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const rate = await checkRateLimit({
+      key: `profile-extract:${org.user.id}:${getClientIp(request)}`,
+      limit: 60,
+      windowSeconds: 60,
+      route: '/api/operator/profile-sheets/extract',
+      userId: org.user.id,
+    })
+    if (!rate.allowed) {
+      const limited = tooManyRequests(rate.resetAt)
+      return NextResponse.json(limited.body, limited.init)
+    }
+
     const formData = await request.formData()
     const file = formData.get('file')
 
@@ -49,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (file.size > MAX_FILE_BYTES) {
-      return NextResponse.json({ error: 'Profile sheets must be 25 MB or smaller.' }, { status: 413 })
+      return NextResponse.json({ error: 'Profile sheets must be 30 MB or smaller.' }, { status: 413 })
     }
 
     const fileName = file.name || 'profile-sheet'
@@ -63,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     if (!extension || !SUPPORTED_EXTENSIONS.has(extension)) {
       return NextResponse.json({
-        error: 'Unsupported file type. Upload DOCX, PDF, TXT, CSV, JPG, PNG, or WEBP profile sheets.',
+        error: 'Unsupported file type. Upload DOCX, PDF, XLSX, TXT, CSV, JPG, PNG, or WEBP profile sheets.',
       }, { status: 400 })
     }
 

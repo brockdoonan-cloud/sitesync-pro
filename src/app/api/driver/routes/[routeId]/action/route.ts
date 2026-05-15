@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
 import { etaFromMinutes, stopSwapPlan } from '@/lib/dispatch/lifecycle'
+import { getClientIp } from '@/lib/request'
+import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 
 type Params = { params: Promise<{ routeId: string }> }
 
@@ -37,6 +39,18 @@ export async function POST(request: NextRequest, { params }: Params) {
   const body = await request.json().catch(() => ({}))
   const action = String(body?.action || '').toLowerCase()
   const supabase = createAdminClient() || await createClient()
+
+  const rate = await checkRateLimit({
+    key: `driver-route-action:${org.user.id}:${getClientIp(request)}`,
+    limit: 60,
+    windowSeconds: 60,
+    route: '/api/driver/routes/[routeId]/action',
+    userId: org.user.id,
+  })
+  if (!rate.allowed) {
+    const limited = tooManyRequests(rate.resetAt)
+    return NextResponse.json(limited.body, limited.init)
+  }
 
   const { data: route, error: routeError } = await supabase
     .from('driver_routes')

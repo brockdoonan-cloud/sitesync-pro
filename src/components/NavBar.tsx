@@ -37,6 +37,7 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
   ]
   const opMoreLinks: NavLink[] = [
     ...(isSuperAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
+    { href: '/dashboard/driver', label: 'Driver' },
     { href: '/dashboard/operator/onboarding', label: t('setup') },
     { href: '/dashboard/operator/import', label: t('import') },
     { href: '/dashboard/operator/coverage', label: t('coverage') },

@@ -45,6 +45,99 @@ function numberInputValue(value: number | null) {
   return value === null || Number.isNaN(value) ? '' : String(value)
 }
 
+function manualTerm(label: string, value: number | null, chargeMode: BillingChargeMode): ProfileSheetExtraction['pricing'][PricingKey] {
+  return {
+    label,
+    value,
+    confidence: 'medium',
+    enabled: value !== null && chargeMode !== 'manual',
+    chargeMode,
+    source: 'Entered manually by operator.',
+  }
+}
+
+function baseBillingRules(): ProfileSheetExtraction['billingRules'] {
+  return [
+    { eventType: 'delivery_completed', chargeLabel: 'Bin drop', rate: 395, unit: 'event', enabled: true, chargeMode: 'per_service', description: 'Applied whenever a driver completes a bin delivery.' },
+    { eventType: 'swap_completed', chargeLabel: 'Bin swap', rate: 395, unit: 'event', enabled: true, chargeMode: 'per_service', description: 'Applied whenever a driver completes a swap and closes the stop.' },
+    { eventType: 'pickup_completed', chargeLabel: 'Bin pickup', rate: 395, unit: 'event', enabled: true, chargeMode: 'per_service', description: 'Applied when a final pickup is completed.' },
+    { eventType: 'monthly_usage', chargeLabel: 'Monthly bin usage', rate: 150, unit: 'bin_month', enabled: true, chargeMode: 'per_bin_month', description: 'Applied once per active bin on site for the billing month.' },
+    { eventType: 'water_pumpout_completed', chargeLabel: 'Water pumpout', rate: 395, unit: 'event', enabled: false, chargeMode: 'per_pumpout', description: 'Applied when a pumpout is completed.' },
+    { eventType: 'environmental_service_fee', chargeLabel: 'Environmental service fee', rate: 25, unit: 'event', enabled: true, chargeMode: 'per_service', description: 'Applied to each billable service event.' },
+    { eventType: 'fuel_surcharge', chargeLabel: 'Fuel surcharge', rate: 0, unit: 'percent', enabled: false, chargeMode: 'percent_of_service', description: 'Calculated as a percent of service and environmental charges.' },
+    { eventType: 'dead_run', chargeLabel: 'Dead run', rate: 0, unit: 'flag', enabled: false, chargeMode: 'conditional', description: 'Applied when the driver cannot complete the service due to site conditions.' },
+    { eventType: 'trash_or_overload', chargeLabel: 'Trash or overload fee', rate: 0, unit: 'flag', enabled: false, chargeMode: 'conditional', description: 'Applied when unauthorized material or overloaded concrete is documented.' },
+  ]
+}
+
+function createManualExtraction(): ProfileSheetExtraction {
+  const extraction: ProfileSheetExtraction = {
+    fileName: 'manual-entry',
+    sourceFilePath: null,
+    jobId: null,
+    extractedAt: new Date().toISOString(),
+    customer: {
+      legalBusinessName: '',
+      billingAddress: '',
+      billingCity: '',
+      billingState: '',
+      billingZip: '',
+      mainPhone: '',
+      taxId: '',
+      billingContactName: '',
+      billingEmail: '',
+      additionalBillingEmails: [],
+    },
+    job: {
+      jobsiteName: '',
+      jobNumber: '',
+      poNumber: '',
+      agreementDate: '',
+      jobsiteAddress: '',
+      jobsiteCity: '',
+      jobsiteState: 'FL',
+      jobsiteZip: '',
+      jobsiteContactName: '',
+      jobsiteContactPhone: '',
+      jobsiteContactEmail: '',
+    },
+    pricing: {
+      oneBinService: manualTerm('Using 1 bin at a time', 395, 'per_service'),
+      twoBinService: manualTerm('Using 2 bins at a time', null, 'per_service'),
+      waterPumpout: manualTerm('Bin pumpout - water', null, 'per_pumpout'),
+      slurryPumpout: manualTerm('Bin pumpout - slurry / paint', null, 'per_pumpout'),
+      trashFee: manualTerm('Trash or unauthorized materials', null, 'conditional'),
+      deadRun: manualTerm('Dead run', null, 'conditional'),
+      relocate: manualTerm('Bin relocate', null, 'conditional'),
+      onsiteRelocate: manualTerm('Onsite relocation', null, 'conditional'),
+      sameDayWeekendFee: manualTerm('Same day / nights / weekends', null, 'conditional'),
+      monthlyUsage: manualTerm('Monthly bin usage fee', 150, 'per_bin_month'),
+      environmentalFee: manualTerm('Environmental service fee', 25, 'per_service'),
+      fuelSurchargePercent: manualTerm('Fuel surcharge percent', 0, 'percent_of_service'),
+      overloadedFee: manualTerm('Container overloaded fee', null, 'conditional'),
+      standbyThirtyToFortyFive: manualTerm('Stand-by 31-45 minutes', null, 'conditional'),
+      standbyFortySixToSixty: manualTerm('Stand-by 46-60 minutes', null, 'conditional'),
+      weightTicketFee: manualTerm('Weight ticket fee', null, 'conditional'),
+    },
+    compliance: { greenBuildingRequired: null, weightTicketRequired: null },
+    signers: { salespersonName: '', customerSignerName: '', customerSignedDate: '' },
+    billingRules: baseBillingRules(),
+    feeSettings: {},
+    preview: {
+      periodLabel: '',
+      activity: { swaps: 0, drops: 0, pickups: 0, pumpouts: 0, activeBins: 0 },
+      lines: [],
+      serviceSubtotal: 0,
+      recurringSubtotal: 0,
+      surchargeTotal: 0,
+      total: 0,
+    },
+    warnings: [],
+    sourceTextExcerpt: 'Manual entry: operator typed the billing profile because OCR/scanning was not needed or could not read the document.',
+  }
+  return rebuildPreview(extraction)
+}
+
 function termValue(extraction: ProfileSheetExtraction, key: PricingKey, fallback = 0) {
   return Number(extraction.pricing[key].value ?? fallback)
 }
@@ -105,9 +198,11 @@ function rebuildPreview(extraction: ProfileSheetExtraction): ProfileSheetExtract
 
 export default function ProfileSheetImportPage() {
   const [extraction, setExtraction] = useState<ProfileSheetExtraction | null>(null)
+  const [source, setSource] = useState<'ocr_import' | 'manual_entry'>('ocr_import')
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -129,12 +224,42 @@ export default function ProfileSheetImportPage() {
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Could not extract this profile sheet.')
+      setSource('ocr_import')
       setExtraction(payload.extraction)
       setMessage(`Extracted billing terms from ${file.name}. Review every value before saving.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not upload this profile sheet.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const startManual = () => {
+    setError('')
+    setMessage('Manual entry mode: type the customer, jobsite, and billing rates, then optionally attach the signed profile sheet for the project file.')
+    setSource('manual_entry')
+    setExtraction(createManualExtraction())
+  }
+
+  const archiveAttachment = async (file?: File) => {
+    if (!file || !extraction) return
+    setError('')
+    setArchiving(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/operator/profile-sheets/archive', {
+        method: 'POST',
+        body: formData,
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Could not archive this attachment.')
+      setExtraction(prev => prev ? { ...prev, fileName: payload.fileName || prev.fileName, sourceFilePath: payload.filePath || prev.sourceFilePath } : prev)
+      setMessage(`Attached ${payload.fileName || file.name} to the manual job file.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not archive this attachment.')
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -193,6 +318,18 @@ export default function ProfileSheetImportPage() {
 
   const save = async () => {
     if (!extraction) return
+    if (!extraction.customer.legalBusinessName.trim()) {
+      setError('Company name is required before saving.')
+      return
+    }
+    if (!extraction.job.jobsiteName.trim() && !extraction.job.jobsiteAddress.trim()) {
+      setError('Jobsite name or jobsite address is required before saving.')
+      return
+    }
+    if (!Number(extraction.pricing.oneBinService.value || 0)) {
+      setError('Drop / swap / pickup rate is required before saving.')
+      return
+    }
     setSaving(true)
     setError('')
     setMessage('')
@@ -201,13 +338,14 @@ export default function ProfileSheetImportPage() {
       const response = await fetch('/api/operator/profile-sheets/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ extraction }),
+        body: JSON.stringify({ extraction, source }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Could not save this profile sheet.')
       const warningText = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : ''
       const jobText = payload.jobId ? ` Linked to job ${payload.jobId.slice(0, 8)}.` : ''
       setMessage(`Saved client pricing profile${payload.pricingProfileId ? ` ${payload.pricingProfileId.slice(0, 8)}` : ''}.${jobText}${warningText}`)
+      if (payload.jobId) window.location.href = `/dashboard/operator/jobs/${payload.jobId}`
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this profile sheet.')
     } finally {
@@ -231,23 +369,42 @@ export default function ProfileSheetImportPage() {
         </div>
       )}
 
-      <label
-        onDragOver={event => { event.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={event => {
-          event.preventDefault()
-          setDragging(false)
-          upload(event.dataTransfer.files[0])
-        }}
-        className={`block cursor-pointer rounded-2xl border border-dashed px-6 py-10 text-center transition-colors ${dragging ? 'border-sky-300 bg-sky-500/20' : 'border-sky-500/40 bg-sky-500/10 hover:border-sky-400'}`}
-      >
-        <input type="file" accept=".docx,.pdf,.txt,.text,.md,.csv,.jpg,.jpeg,.png,.webp" className="hidden" onChange={event => upload(event.target.files?.[0])} />
-        <div className="text-lg font-semibold text-white">{loading ? 'Reading profile sheet...' : 'Drop customer profile sheet or signed agreement here'}</div>
-        <div className="mt-2 text-sm text-slate-400">Upload from anywhere on this computer. Supports DOCX, text-based PDF, TXT/CSV, and scanned PDFs/images when OCR is enabled. The system extracts customer info, jobsite, swap pricing, monthly usage, environmental fee, fuel surcharge, standby, and special charges.</div>
-      </label>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+        <label
+          onDragOver={event => { event.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={event => {
+            event.preventDefault()
+            setDragging(false)
+            upload(event.dataTransfer.files[0])
+          }}
+          className={`block cursor-pointer rounded-2xl border border-dashed px-6 py-10 text-center transition-colors ${dragging ? 'border-sky-300 bg-sky-500/20' : 'border-sky-500/40 bg-sky-500/10 hover:border-sky-400'}`}
+        >
+          <input type="file" accept=".docx,.pdf,.xlsx,.txt,.text,.md,.csv,.jpg,.jpeg,.png,.webp" className="hidden" onChange={event => upload(event.target.files?.[0])} />
+          <div className="text-lg font-semibold text-white">{loading ? 'Reading profile sheet...' : 'Drop customer profile sheet or signed agreement here'}</div>
+          <div className="mt-2 text-sm text-slate-400">Upload from anywhere on this computer. Supports DOCX, PDF, XLSX, TXT/CSV, and scanned PDFs/images when OCR is enabled. PDFs are limited to 30 MB and 100 pages.</div>
+        </label>
+        <button type="button" onClick={startManual} className="rounded-2xl border border-slate-700/60 bg-slate-800/50 px-6 py-6 text-left hover:border-sky-500/40">
+          <div className="text-lg font-semibold text-white">Enter manually</div>
+          <div className="mt-2 max-w-sm text-sm text-slate-400">Use this when the scan is poor, the file type cannot be read, or dispatch needs to create a job and attach the signed paperwork without OCR.</div>
+        </button>
+      </div>
 
       {extraction && (
         <>
+          {source === 'manual_entry' && (
+            <section className="card space-y-3">
+              <div>
+                <h2 className="font-semibold text-white">Manual Profile Sheet Attachment</h2>
+                <p className="mt-1 text-xs text-slate-500">Optional. This archives the signed PDF/image/document with the job file without trying to scan it.</p>
+              </div>
+              <label className="block cursor-pointer rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 px-4 py-5 text-sm text-slate-300 hover:border-sky-500/50">
+                <input type="file" accept=".pdf,.doc,.docx,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.webp,.heic,.heif" className="hidden" onChange={event => archiveAttachment(event.target.files?.[0])} />
+                {archiving ? 'Archiving attachment...' : extraction.sourceFilePath ? `Attached: ${extraction.fileName}` : 'Attach signed profile sheet, agreement, or job paperwork'}
+              </label>
+            </section>
+          )}
+
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <div className="card space-y-4">
               <div>

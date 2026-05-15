@@ -9,12 +9,15 @@ set
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/pdf',
     'application/msword',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/plain',
     'text/markdown',
     'text/csv',
     'image/jpeg',
     'image/png',
-    'image/webp'
+    'image/webp',
+    'image/heic',
+    'image/heif'
   ]
 where id = 'profile-sheets';
 

@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
   const timePreference = clean(body.time_preference)
   const rawNotes = clean(body.notes)
   const clientId = clean(body.client_id)
+  const jobId = clean(body.job_id)
 
   if (!activeServiceTypes.has(serviceType)) {
     return NextResponse.json({ error: 'Choose a valid service type.' }, { status: 400 })
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
   const payload = {
     customer_id: user.id,
     client_id: clientId || null,
+    job_id: jobId || null,
     jobsite_id: clean(body.jobsite_id) || null,
     service_type: serviceType,
     jobsite_address: jobsiteAddress,

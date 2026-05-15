@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { billingEventTypeForStop, etaFromMinutes, firstBinNumber, stopSwapPlan } from '@/lib/dispatch/lifecycle'
 import { logAuditEvent } from '@/lib/audit/log'
 import { captureAppException } from '@/lib/monitoring/sentry'
+import { getClientIp } from '@/lib/request'
+import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 
 type Params = { params: Promise<{ stopId: string }> }
 
@@ -92,6 +94,13 @@ async function updateEquipmentByBin(supabase: any, organizationId: string, binNu
   return data || null
 }
 
+function gpsColumns(body: any, latColumn: string, lngColumn: string) {
+  const lat = Number(body?.lat)
+  const lng = Number(body?.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {}
+  return { [latColumn]: lat, [lngColumn]: lng }
+}
+
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
@@ -101,6 +110,18 @@ export async function POST(request: NextRequest, { params }: Params) {
   const body = await request.json().catch(() => ({}))
   const action = String(body?.action || '').toLowerCase()
   const supabase = createAdminClient() || await createClient()
+
+  const rate = await checkRateLimit({
+    key: `driver-stop-action:${org.user.id}:${getClientIp(request)}`,
+    limit: 60,
+    windowSeconds: 60,
+    route: '/api/driver/stops/[stopId]/action',
+    userId: org.user.id,
+  })
+  if (!rate.allowed) {
+    const limited = tooManyRequests(rate.resetAt)
+    return NextResponse.json(limited.body, limited.init)
+  }
 
   const { data: stop, error: stopError } = await supabase
     .from('route_stops')
@@ -123,6 +144,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           eta,
           eta_minutes: Number(body?.eta_minutes) || 45,
           driver_notes: body?.notes ? [stop.driver_notes, String(body.notes)].filter(Boolean).join('\n') : stop.driver_notes || null,
+          ...gpsColumns(body, 'started_lat', 'started_lng'),
         })
         .eq('id', stopId)
         .select('*')
@@ -149,7 +171,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (action === 'arrived') {
       const { data: updatedStop, error } = await supabase
         .from('route_stops')
-        .update({ status: 'arrived', arrived_at: new Date().toISOString() })
+        .update({ status: 'arrived', arrived_at: new Date().toISOString(), ...gpsColumns(body, 'arrived_lat', 'arrived_lng') })
         .eq('id', stopId)
         .select('*')
         .single()
@@ -195,6 +217,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           completed_at: now,
           proof_notes: body?.proof_notes ? String(body.proof_notes) : stop.proof_notes || null,
           completed_by_user_id: org.user.id,
+          ...gpsColumns(body, 'completed_lat', 'completed_lng'),
         })
         .eq('id', stopId)
         .select('*')
@@ -258,11 +281,16 @@ export async function POST(request: NextRequest, { params }: Params) {
       if (!existingBillingEvent) {
         await supabase.from('billing_events').insert({
           organization_id: stop.organization_id,
+          client_id: stop.client_id || null,
+          job_id: stop.job_id || null,
+          route_stop_id: stopId,
           event_date: now.slice(0, 10),
           event_type: billingEventTypeForStop(stop.stop_type),
           source_file: 'driver_route_closeout',
           project_name: stop.address || null,
           bin_number: deliveryBin || pickupBin,
+          charge_type: billingEventTypeForStop(stop.stop_type),
+          status: 'pending_review',
           payload: {
             route_id: stop.route_id,
             route_stop_id: stopId,
@@ -306,7 +334,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (action === 'cancel') {
       const { data: updatedStop, error } = await supabase
         .from('route_stops')
-        .update({ status: 'cancelled', driver_notes: body?.notes ? String(body.notes) : stop.driver_notes || null })
+        .update({
+          status: 'cancelled',
+          skipped_at: new Date().toISOString(),
+          skipped_reason: body?.reason ? String(body.reason) : body?.notes ? String(body.notes) : null,
+          driver_notes: body?.notes ? String(body.notes) : stop.driver_notes || null,
+        })
         .eq('id', stopId)
         .select('*')
         .single()

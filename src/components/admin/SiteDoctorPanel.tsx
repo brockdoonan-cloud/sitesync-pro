@@ -15,6 +15,16 @@ type Report = {
   checkedAt: string
   checks: Check[]
   repairs: string[]
+  recentErrors?: {
+    status: 'ok' | 'warn' | 'fail'
+    detail: string
+    events: Array<{ title: string; level: string; timestamp: string; permalink: string }>
+  }
+  slowQueries?: {
+    status: 'ok' | 'warn' | 'fail'
+    detail: string
+    rows: Array<{ query: string; calls: number; total_exec_time: number; mean_exec_time: number; rows: number }>
+  }
 }
 
 const statusClass = {
@@ -85,6 +95,38 @@ export default function SiteDoctorPanel() {
               {report.repairs.join(' ')}
             </div>
           )}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-white">Recent Errors</h3>
+                {report.recentErrors && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClass[report.recentErrors.status]}`}>{report.recentErrors.status}</span>}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{report.recentErrors?.detail || 'No Sentry result returned.'}</p>
+              <div className="mt-3 space-y-2">
+                {(report.recentErrors?.events || []).map(event => (
+                  <a key={`${event.timestamp}-${event.title}`} href={event.permalink} target="_blank" rel="noreferrer" className="block rounded-lg border border-slate-700/50 bg-slate-950/50 px-3 py-2 hover:border-sky-500/50">
+                    <div className="text-sm font-medium text-white">{event.title}</div>
+                    <div className="mt-1 text-xs text-slate-500">{event.level} | {new Date(event.timestamp).toLocaleString()}</div>
+                  </a>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-white">Slowest Queries</h3>
+                {report.slowQueries && <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClass[report.slowQueries.status]}`}>{report.slowQueries.status}</span>}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{report.slowQueries?.detail || 'No slow-query result returned.'}</p>
+              <div className="mt-3 space-y-2">
+                {(report.slowQueries?.rows || []).map((row, index) => (
+                  <div key={`${index}-${row.query}`} className="rounded-lg border border-slate-700/50 bg-slate-950/50 px-3 py-2">
+                    <div className="font-mono text-xs text-slate-300">{row.query}</div>
+                    <div className="mt-1 text-xs text-slate-500">calls {row.calls} | mean {row.mean_exec_time.toFixed(1)}ms | total {row.total_exec_time.toFixed(1)}ms | rows {row.rows}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

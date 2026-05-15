@@ -23,7 +23,7 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
   if (clientIds.length > 0) {
     const result = await supabase
       .from('equipment')
-      .select('id,bin_number,container_number,type,status,location,last_serviced_at,client_id,current_client_id,jobsite_id,current_jobsite_id', { count: 'exact' })
+      .select('id,bin_number,container_number,type,status,location,last_serviced_at,client_id,current_client_id,job_id,jobsite_id,current_jobsite_id', { count: 'exact' })
       .or(clientIdOrFilter(clientIds))
       .in('status', ['deployed', 'needs_swap', 'full', 'in_transit'])
       .order('bin_number', { ascending: true })
@@ -81,6 +81,7 @@ export default async function CustomerBinsPage({ searchParams }: { searchParams?
       ...item,
       client_id: null,
       current_client_id: null,
+      job_id: null,
       jobsite_id: null,
       current_jobsite_id: null,
       active_swap_requested: activeDemoSwapBins.has(item.bin_number),

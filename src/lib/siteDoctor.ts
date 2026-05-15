@@ -10,11 +10,36 @@ export type SiteDoctorCheck = {
   action?: string
 }
 
+export type SiteDoctorErrorEvent = {
+  title: string
+  level: string
+  timestamp: string
+  permalink: string
+}
+
+export type SiteDoctorSlowQuery = {
+  query: string
+  calls: number
+  total_exec_time: number
+  mean_exec_time: number
+  rows: number
+}
+
 export type SiteDoctorReport = {
   status: CheckStatus
   checkedAt: string
   checks: SiteDoctorCheck[]
   repairs: string[]
+  recentErrors: {
+    status: CheckStatus
+    detail: string
+    events: SiteDoctorErrorEvent[]
+  }
+  slowQueries: {
+    status: CheckStatus
+    detail: string
+    rows: SiteDoctorSlowQuery[]
+  }
 }
 
 function worstStatus(checks: SiteDoctorCheck[]): CheckStatus {
@@ -27,6 +52,74 @@ async function tableCount(admin: any, table: string) {
   const { count, error } = await admin.from(table).select('*', { count: 'exact', head: true })
   if (error) return { count: 0, error }
   return { count: count || 0, error: null }
+}
+
+async function fetchRecentSentryErrors() {
+  const org = process.env.SENTRY_ORG
+  const project = process.env.SENTRY_PROJECT
+  const token = process.env.SENTRY_API_TOKEN
+  if (!org || !project || !token) {
+    return { status: 'warn' as CheckStatus, detail: 'Sentry API env vars are not configured.', events: [] as SiteDoctorErrorEvent[] }
+  }
+
+  try {
+    const response = await fetch(`https://sentry.io/api/0/projects/${org}/${project}/events/?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    if (response.status === 401 || response.status === 403) {
+      return { status: 'warn' as CheckStatus, detail: 'Sentry token invalid or insufficient scopes.', events: [] as SiteDoctorErrorEvent[] }
+    }
+    if (response.status === 404) {
+      return { status: 'warn' as CheckStatus, detail: 'Sentry project not found - check SENTRY_ORG/SENTRY_PROJECT.', events: [] as SiteDoctorErrorEvent[] }
+    }
+    if (!response.ok) {
+      return { status: 'warn' as CheckStatus, detail: `Sentry returned ${response.status}.`, events: [] as SiteDoctorErrorEvent[] }
+    }
+    const payload = await response.json()
+    const events = (Array.isArray(payload) ? payload : []).map((event: any) => ({
+      title: event.title || event.message || event.eventID || 'Untitled error',
+      level: event.level || 'error',
+      timestamp: event.dateCreated || event.timestamp || new Date().toISOString(),
+      permalink: event.permalink || `https://sentry.io/organizations/${org}/issues/?project=${project}`,
+    }))
+    return {
+      status: 'ok' as CheckStatus,
+      detail: events.length > 0 ? `${events.length} recent Sentry event(s).` : 'No recent errors.',
+      events,
+    }
+  } catch {
+    return { status: 'warn' as CheckStatus, detail: 'Sentry unreachable.', events: [] as SiteDoctorErrorEvent[] }
+  }
+}
+
+async function fetchSlowQueries(admin: any) {
+  if (!admin) {
+    return { status: 'warn' as CheckStatus, detail: 'SUPABASE_SERVICE_ROLE_KEY is required for slow-query rankings.', rows: [] as SiteDoctorSlowQuery[] }
+  }
+  const { data, error } = await admin.rpc('site_doctor_slowest_queries')
+  if (error) {
+    const message = String(error.message || error)
+    if (/permission denied/i.test(message)) {
+      return { status: 'warn' as CheckStatus, detail: 'Permission denied. Run GRANT pg_read_all_stats TO service_role;', rows: [] as SiteDoctorSlowQuery[] }
+    }
+    if (/does not exist|Could not find|schema cache/i.test(message)) {
+      return { status: 'warn' as CheckStatus, detail: 'Slow-query RPC not installed yet. Run migration 0017_prelaunch_hardening.sql.', rows: [] as SiteDoctorSlowQuery[] }
+    }
+    return { status: 'warn' as CheckStatus, detail: message, rows: [] as SiteDoctorSlowQuery[] }
+  }
+  const rows = (data || []).map((row: any) => ({
+    query: String(row.query || '').slice(0, 120),
+    calls: Number(row.calls || 0),
+    total_exec_time: Number(row.total_exec_time || 0),
+    mean_exec_time: Number(row.mean_exec_time || 0),
+    rows: Number(row.rows || 0),
+  }))
+  return {
+    status: 'ok' as CheckStatus,
+    detail: rows.length > 0 ? `${rows.length} slow-query row(s) loaded.` : 'No slow query data returned.',
+    rows,
+  }
 }
 
 function checkFromError(key: string, label: string, error: any, okDetail: string): SiteDoctorCheck {
@@ -54,7 +147,14 @@ export async function runSiteDoctor(admin: any, options: { repair?: boolean } = 
       detail: 'SUPABASE_SERVICE_ROLE_KEY is not configured, so the doctor cannot inspect or repair protected data.',
       action: 'Add SUPABASE_SERVICE_ROLE_KEY in Vercel before onboarding real operators.',
     })
-    return { status: 'fail', checkedAt: new Date().toISOString(), checks, repairs }
+    return {
+      status: 'fail',
+      checkedAt: new Date().toISOString(),
+      checks,
+      repairs,
+      recentErrors: await fetchRecentSentryErrors(),
+      slowQueries: await fetchSlowQueries(admin),
+    }
   }
 
   const criticalTables = [
@@ -167,5 +267,7 @@ export async function runSiteDoctor(admin: any, options: { repair?: boolean } = 
     checkedAt: new Date().toISOString(),
     checks,
     repairs,
+    recentErrors: await fetchRecentSentryErrors(),
+    slowQueries: await fetchSlowQueries(admin),
   }
 }

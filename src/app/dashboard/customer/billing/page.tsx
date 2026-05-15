@@ -21,6 +21,19 @@ type InvoiceRow = {
   notes?: string | null
 }
 
+type BillingEventRow = {
+  id: string
+  event_date?: string | null
+  charge_type?: string | null
+  event_type?: string | null
+  amount?: number | string | null
+  note?: string | null
+  photo_url?: string | null
+  project_name?: string | null
+  bin_number?: string | null
+  status?: string | null
+}
+
 function relationMissing(error: any) {
   const message = String(error?.message || '')
   return error?.code === '42P01' || /does not exist|schema cache/i.test(message)
@@ -80,6 +93,7 @@ export default function CustomerBillingPage() {
   const [message, setMessage] = useState('')
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null)
   const [showAccessLink, setShowAccessLink] = useState(false)
+  const [charges, setCharges] = useState<BillingEventRow[]>([])
 
   useEffect(() => {
     async function load() {
@@ -109,6 +123,19 @@ export default function CustomerBillingPage() {
             .range(from, to)
           }
         )
+        if (linkedClientIds.length) {
+          const { data: chargeRows, error: chargeError } = await supabase
+            .from('billing_events')
+            .select('id,event_date,charge_type,event_type,amount,note,photo_url,project_name,bin_number,status')
+            .in('client_id', linkedClientIds)
+            .order('event_date', { ascending: false })
+            .limit(50)
+
+          if (chargeError && !relationMissing(chargeError)) throw chargeError
+          setCharges(chargeRows || [])
+        } else {
+          setCharges([])
+        }
         setShowAccessLink(linkedClientIds.length === 0 && rows.length === 0)
         setInvoices(rows.length ? rows : demoInvoices())
       } catch (err) {
@@ -157,6 +184,35 @@ export default function CustomerBillingPage() {
         <div className="card text-slate-400">Loading billing...</div>
       ) : (
         <div className="space-y-4">
+          {charges.length > 0 && (
+            <section className="card">
+              <h2 className="text-lg font-semibold text-white">Driver-documented charges</h2>
+              <p className="mt-1 text-sm text-slate-400">Photo-backed charges appear here before they are finalized on an invoice.</p>
+              <div className="mt-4 space-y-3">
+                {charges.map(charge => (
+                  <div key={charge.id} className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-white">{charge.charge_type || charge.event_type || 'Additional charge'}</div>
+                        <div className="mt-1 text-sm text-slate-400">{charge.project_name || 'Project pending'}{charge.bin_number ? ` | Bin #${charge.bin_number}` : ''}</div>
+                        {charge.note && <p className="mt-2 text-sm text-slate-300">{charge.note}</p>}
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <div className="text-xl font-bold text-white">{money(Number(charge.amount || 0))}</div>
+                        <div className="text-xs text-slate-500 capitalize">{charge.status || 'pending review'} | {charge.event_date || 'Date pending'}</div>
+                      </div>
+                    </div>
+                    {charge.photo_url && (
+                      <div className="mt-3 rounded-lg border border-slate-700/50 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+                        Photo evidence is stored securely and visible to the operator for review.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {invoices.map(invoice => {
             const lines = parseLines(invoice.notes)
             const total = Number(invoice.total || invoice.amount || 0)

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getCurrentOrg } from '@/lib/auth/getCurrentOrg'
 import { createClient } from '@/lib/supabase/server'
 import { captureAppException } from '@/lib/monitoring/sentry'
 import type { ProfileSheetExtraction } from '@/lib/billing/profileSheetTypes'
+import { logAuditEvent } from '@/lib/audit/log'
+import { getClientIp } from '@/lib/request'
+import { checkRateLimit, tooManyRequests } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -43,6 +47,27 @@ function chargeValue(term: { value: number | null; enabled?: boolean }, fallback
   if (term.enabled === false) return 0
   return asNumber(term.value, fallback)
 }
+
+const profileSaveSchema = z.object({
+  source: z.enum(['ocr_import', 'manual_entry']).optional().default('ocr_import'),
+  extraction: z.object({
+    fileName: z.string().min(1),
+    sourceFilePath: z.string().nullable().optional(),
+    customer: z.object({
+      legalBusinessName: z.string().min(1, 'Company name is required.'),
+    }).passthrough(),
+    job: z.object({
+      jobsiteName: z.string().optional().default(''),
+      jobsiteAddress: z.string().optional().default(''),
+    }).passthrough(),
+    pricing: z.object({
+      oneBinService: z.object({
+        value: z.number().nullable(),
+        enabled: z.boolean().optional(),
+      }).passthrough(),
+    }).passthrough(),
+  }).passthrough(),
+}).passthrough()
 
 async function findOrCreateClient(supabase: Awaited<ReturnType<typeof createClient>>, extraction: ProfileSheetExtraction, organizationId: string | null) {
   const clientName = firstText(extraction.customer.legalBusinessName, extraction.fileName.replace(/\.[^.]+$/, ''))
@@ -157,10 +182,33 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const rate = await checkRateLimit({
+      key: `profile-save:${org.user.id}:${getClientIp(request)}`,
+      limit: 60,
+      windowSeconds: 60,
+      route: '/api/operator/profile-sheets/save',
+      userId: org.user.id,
+    })
+    if (!rate.allowed) {
+      const limited = tooManyRequests(rate.resetAt)
+      return NextResponse.json(limited.body, limited.init)
+    }
+
     const body = await request.json().catch(() => null)
-    const extraction = body?.extraction as ProfileSheetExtraction | undefined
+    const parsed = profileSaveSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid profile sheet payload.' }, { status: 400 })
+    }
+    const source = parsed.data.source
+    const extraction = parsed.data.extraction as ProfileSheetExtraction | undefined
     if (!extraction?.pricing) {
       return NextResponse.json({ error: 'Missing extracted profile sheet terms.' }, { status: 400 })
+    }
+    if (!firstText(extraction.job.jobsiteName, extraction.job.jobsiteAddress)) {
+      return NextResponse.json({ error: 'Jobsite name or address is required.' }, { status: 400 })
+    }
+    if (chargeValue(extraction.pricing.oneBinService, 0) <= 0) {
+      return NextResponse.json({ error: 'Drop / swap / pickup rate is required.' }, { status: 400 })
     }
 
     const supabase = await createClient()
@@ -191,6 +239,7 @@ export async function POST(request: NextRequest) {
       fee_settings: extraction.feeSettings,
       billing_preview: extraction.preview,
       source_text_excerpt: extraction.sourceTextExcerpt || null,
+      import_source: source,
       active: true,
       created_by_user_id: org.user.id,
     }
@@ -198,9 +247,11 @@ export async function POST(request: NextRequest) {
     let profileSheetId: string | null = null
     const profileWithoutJob = { ...profilePayload }
     delete (profileWithoutJob as any).job_id
+    const profileWithoutSource = { ...profileWithoutJob }
+    delete (profileWithoutSource as any).import_source
     const profileWithoutOrg = { ...profileWithoutJob }
     delete (profileWithoutOrg as any).organization_id
-    const profileResult = await insertWithFallbacks(supabase, 'customer_profile_sheets', [profilePayload, profileWithoutJob, profileWithoutOrg])
+    const profileResult = await insertWithFallbacks(supabase, 'customer_profile_sheets', [profilePayload, profileWithoutJob, profileWithoutSource, profileWithoutOrg])
     if (profileResult.error) {
       warnings.push(`Profile sheet archive was not saved yet: ${profileResult.error.message}`)
     } else {
@@ -273,16 +324,37 @@ export async function POST(request: NextRequest) {
         fuel_surcharge: extraction.preview.surchargeTotal,
         total: extraction.preview.total,
         status: 'draft',
+        import_source: source,
         created_by_user_id: org.user.id,
       }
       const runWithoutJob = { ...runPayload }
       delete (runWithoutJob as any).job_id
+      const runWithoutSource = { ...runWithoutJob }
+      delete (runWithoutSource as any).import_source
       const runWithoutOrg = { ...runWithoutJob }
       delete (runWithoutOrg as any).organization_id
-      const runResult = await insertWithFallbacks(supabase, 'profile_sheet_billing_runs', [runPayload, runWithoutJob, runWithoutOrg])
+      const runResult = await insertWithFallbacks(supabase, 'profile_sheet_billing_runs', [runPayload, runWithoutJob, runWithoutSource, runWithoutOrg])
       if (runResult.error) warnings.push(`Billing preview run was not archived yet: ${runResult.error.message}`)
       else billingRunId = runResult.data.id as string
     }
+
+    await logAuditEvent({
+      userId: org.user.id,
+      orgId: organizationId,
+      action: 'save_profile_sheet',
+      resourceType: 'customer_profile_sheet',
+      resourceId: profileSheetId || jobResult.jobId || clientId,
+      afterState: {
+        source,
+        clientId,
+        jobId: jobResult.jobId,
+        profileSheetId,
+        pricingProfileId: pricingResult.data?.id || null,
+        billingRunId,
+        fileName: extraction.fileName,
+      },
+      request,
+    })
 
     return NextResponse.json({
       saved: !warnings.some(warning => warning.includes('Pricing profile was not saved')),

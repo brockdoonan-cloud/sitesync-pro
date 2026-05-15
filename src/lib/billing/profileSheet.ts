@@ -435,9 +435,58 @@ export async function extractDocxText(buffer: ArrayBuffer | Buffer) {
 export async function extractPdfText(buffer: ArrayBuffer | Buffer, fileName = 'profile-sheet.pdf') {
   const { default: pdfParse } = await import('pdf-parse')
   const parsed = await pdfParse(toNodeBuffer(buffer))
+  if (Number(parsed.numpages || 0) > 100) {
+    throw new Error('PDF profile sheets must be 100 pages or fewer. Split the file or upload the signed agreement pages only.')
+  }
   const text = normalizeText(parsed.text || '')
   if (hasUsableAgreementText(text)) return text
   return extractTextWithAnthropic(buffer, { fileName, mediaType: 'application/pdf', contentType: 'document' })
+}
+
+function extractXmlTextBlocks(xml: string) {
+  return Array.from(xml.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g))
+    .map(match => decodeXml(match[1] || '').trim())
+    .filter(Boolean)
+}
+
+async function readXlsxSharedStrings(zip: JSZip) {
+  const file = zip.files['xl/sharedStrings.xml']
+  if (!file) return []
+  const xml = await file.async('text')
+  return Array.from(xml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)).map(match => {
+    const parts = extractXmlTextBlocks(match[1] || '')
+    return parts.join('')
+  })
+}
+
+function cellValueFromXml(cellXml: string, sharedStrings: string[]) {
+  const inlineParts = extractXmlTextBlocks(cellXml)
+  if (inlineParts.length) return inlineParts.join('')
+
+  const value = cellXml.match(/<v[^>]*>([\s\S]*?)<\/v>/)?.[1]
+  if (value === undefined) return ''
+  if (/\bt="s"/.test(cellXml)) return sharedStrings[Number(value)] || ''
+  return decodeXml(value).trim()
+}
+
+export async function extractXlsxText(buffer: ArrayBuffer | Buffer) {
+  const zip = await JSZip.loadAsync(buffer)
+  const sharedStrings = await readXlsxSharedStrings(zip)
+  const worksheetNames = Object.keys(zip.files)
+    .filter(name => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+
+  const sheetTexts = await Promise.all(worksheetNames.map(async name => {
+    const xml = await zip.files[name].async('text')
+    const rows = Array.from(xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)).map(rowMatch => {
+      const cells = Array.from((rowMatch[1] || '').matchAll(/<c\b[^>]*>[\s\S]*?<\/c>/g))
+        .map(cellMatch => cellValueFromXml(cellMatch[0], sharedStrings))
+      return cells.filter(Boolean).join(' | ')
+    })
+    return rows.filter(Boolean).join('\n')
+  }))
+
+  return normalizeText(sheetTexts.filter(Boolean).join('\n\n'))
 }
 
 export async function extractImageText(buffer: ArrayBuffer | Buffer, mediaType: string, fileName = 'profile-sheet-image') {

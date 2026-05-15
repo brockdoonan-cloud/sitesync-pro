@@ -78,15 +78,8 @@ export default async function AdminDashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card">
-          <h2 className="font-semibold text-white mb-2">Recent Errors</h2>
-          <p className="text-sm text-slate-400">Sentry capture is wired. Add SENTRY_API_TOKEN, SENTRY_ORG, and SENTRY_PROJECT later to show the last 20 errors here.</p>
-        </div>
-        <div className="card">
-          <h2 className="font-semibold text-white mb-2">Slowest Queries</h2>
-          <p className="text-sm text-slate-400">Enable pg_stat_statements access in Supabase before surfacing slow query rankings here.</p>
-        </div>
+      <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
+        Recent Errors and Slowest Queries are shown inside Site Doctor after you run a check.
       </div>
     </div>
   )

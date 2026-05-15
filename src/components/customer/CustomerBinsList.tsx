@@ -14,6 +14,7 @@ export type CustomerBinItem = {
   last_serviced_at?: string | null
   client_id?: string | null
   current_client_id?: string | null
+  job_id?: string | null
   jobsite_id?: string | null
   current_jobsite_id?: string | null
   jobsite?: {
@@ -91,6 +92,7 @@ export default function CustomerBinsList({ items }: { items: CustomerBinItem[] }
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_id: selected.client_id || selected.current_client_id || null,
+        job_id: selected.job_id || null,
         jobsite_id: selected.jobsite_id || selected.current_jobsite_id || null,
         service_type: 'swap',
         jobsite_address: jobsiteAddress,

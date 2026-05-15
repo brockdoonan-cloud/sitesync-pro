@@ -28,6 +28,8 @@ type Equipment = {
 
 type ServiceRequest = {
   id: string
+  client_id?: string | null
+  job_id?: string | null
   service_type?: string | null
   jobsite_address?: string | null
   service_address?: string | null
@@ -72,6 +74,8 @@ type SavedRouteStop = {
   route_id: string
   stop_order: number
   service_request_id?: string | null
+  job_id?: string | null
+  client_id?: string | null
   address?: string | null
   bin_numbers?: string[] | null
   pickup_bin_number?: string | null
@@ -656,7 +660,7 @@ export default function RoutesPage() {
       fetchAllRows<ServiceRequest>((from, to) =>
         supabase
           .from('service_requests')
-          .select('id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
+          .select('id,client_id,job_id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
           .in('status', ['dispatch_ready', 'pending', 'scheduled', 'confirmed', 'in_progress'])
           .order('created_at', { ascending: false })
           .range(from, to)
@@ -677,7 +681,7 @@ export default function RoutesPage() {
       ? await fetchAllRows<SavedRouteStop>((from, to) =>
           supabase
             .from('route_stops')
-            .select('id,route_id,stop_order,service_request_id,address,bin_numbers,stop_type,status,eta,eta_minutes,arrived_at,completed_at,notes')
+            .select('id,route_id,stop_order,service_request_id,job_id,client_id,address,bin_numbers,stop_type,status,eta,eta_minutes,arrived_at,completed_at,notes')
             .in('route_id', routeIds)
             .order('stop_order', { ascending: true })
             .range(from, to)
@@ -847,6 +851,8 @@ export default function RoutesPage() {
           stop_order: index + 1,
           jobsite_id: stop.request?.jobsite_id || (isUuid(stop.id) ? stop.id : null),
           service_request_id: stop.request?.id || null,
+          job_id: stop.request?.job_id || null,
+          client_id: stop.request?.client_id || null,
           address: addressFor(stop),
           lat: roughCoord(stop).lat,
           lng: roughCoord(stop).lng,
