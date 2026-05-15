@@ -204,6 +204,7 @@ $$;
 alter table public.organizations enable row level security;
 alter table public.organization_members enable row level security;
 
+drop policy if exists "organizations_select_members" on public.organizations;
 create policy "organizations_select_members"
   on public.organizations
   for select
@@ -217,12 +218,14 @@ create policy "organizations_select_members"
     )
   );
 
+drop policy if exists "organizations_manage_super_admin" on public.organizations;
 create policy "organizations_manage_super_admin"
   on public.organizations
   for all
   using (public.current_user_is_super_admin())
   with check (public.current_user_is_super_admin());
 
+drop policy if exists "organization_members_select_scoped" on public.organization_members;
 create policy "organization_members_select_scoped"
   on public.organization_members
   for select
@@ -232,6 +235,7 @@ create policy "organization_members_select_scoped"
     or public.current_user_can_access_org(organization_id)
   );
 
+drop policy if exists "organization_members_manage_super_admin" on public.organization_members;
 create policy "organization_members_manage_super_admin"
   on public.organization_members
   for all
@@ -310,26 +314,31 @@ begin
   end loop;
 end $$;
 
+drop policy if exists "clients_select_client_contact" on public.clients;
 create policy "clients_select_client_contact"
   on public.clients
   for select
   using (public.current_user_is_client_for_client(organization_id, id));
 
+drop policy if exists "jobsites_select_client_contact" on public.jobsites;
 create policy "jobsites_select_client_contact"
   on public.jobsites
   for select
   using (public.current_user_is_client_for_client(organization_id, client_id));
 
+drop policy if exists "equipment_select_client_contact" on public.equipment;
 create policy "equipment_select_client_contact"
   on public.equipment
   for select
   using (public.current_user_is_client_for_client(organization_id, coalesce(client_id, current_client_id)));
 
+drop policy if exists "invoices_select_client_contact" on public.invoices;
 create policy "invoices_select_client_contact"
   on public.invoices
   for select
   using (public.current_user_is_client_for_client(organization_id, client_id));
 
+drop policy if exists "pricing_profiles_select_client_contact" on public.pricing_profiles;
 create policy "pricing_profiles_select_client_contact"
   on public.pricing_profiles
   for select
@@ -337,22 +346,26 @@ create policy "pricing_profiles_select_client_contact"
 
 alter table public.service_requests enable row level security;
 
+drop policy if exists "tenant_operators_manage_service_requests" on public.service_requests;
 create policy "tenant_operators_manage_service_requests"
   on public.service_requests
   for all
   using (public.current_user_can_access_org(organization_id))
   with check (public.current_user_can_access_org(organization_id));
 
+drop policy if exists "service_requests_select_client_contact" on public.service_requests;
 create policy "service_requests_select_client_contact"
   on public.service_requests
   for select
   using (public.current_user_is_client_for_customer(organization_id, client_id, customer_id));
 
+drop policy if exists "service_requests_insert_client_contact" on public.service_requests;
 create policy "service_requests_insert_client_contact"
   on public.service_requests
   for insert
   with check (public.current_user_is_client_for_customer(organization_id, client_id, customer_id));
 
+drop policy if exists "service_requests_update_customer_cancel" on public.service_requests;
 create policy "service_requests_update_customer_cancel"
   on public.service_requests
   for update
@@ -361,22 +374,26 @@ create policy "service_requests_update_customer_cancel"
 
 alter table public.quote_requests enable row level security;
 
+drop policy if exists "quote_requests_public_insert" on public.quote_requests;
 create policy "quote_requests_public_insert"
   on public.quote_requests
   for insert
   with check (true);
 
+drop policy if exists "quote_requests_operators_select" on public.quote_requests;
 create policy "quote_requests_operators_select"
   on public.quote_requests
   for select
   using (public.current_user_is_operator());
 
+drop policy if exists "quote_requests_operators_update" on public.quote_requests;
 create policy "quote_requests_operators_update"
   on public.quote_requests
   for update
   using (public.current_user_is_operator())
   with check (public.current_user_is_operator());
 
+drop policy if exists "quote_requests_operators_delete" on public.quote_requests;
 create policy "quote_requests_operators_delete"
   on public.quote_requests
   for delete

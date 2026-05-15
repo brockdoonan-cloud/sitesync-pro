@@ -147,6 +147,32 @@ Create these rules in Sentry project `sitesync-pro/sitesync-pro`:
 
 The Site Doctor reads recent events through `SENTRY_API_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`. Alert delivery is still configured in Sentry's dashboard, not in application code.
 
+## Supabase Auth Password Protection
+
+Enable leaked-password protection before onboarding real operators:
+
+1. Open `https://supabase.com/dashboard/project/odviemgfhdmskhvdgjvy/auth/providers`
+2. Open Password Provider.
+3. Turn on "Leaked password protection".
+4. Save changes.
+
+This is a Supabase Auth dashboard toggle. It is not represented in the SQL migrations in this repo.
+
+## Pending SQL Editor Backlog
+
+If direct Postgres access is unavailable, apply these files manually in Supabase SQL Editor:
+
+1. `supabase/migrations/0015_job_profile_sheet_links.sql`
+2. `supabase/migrations/0016_profile_sheet_file_types.sql`
+3. `supabase/migrations/0017_prelaunch_hardening.sql`
+4. `supabase/migrations/0018_public_quote_rpc_rate_limit.sql`
+
+SQL Editor:
+
+`https://supabase.com/dashboard/project/odviemgfhdmskhvdgjvy/sql/new`
+
+Each file is idempotent and records itself in `supabase_migrations.schema_migrations` when it finishes.
+
 ## Pre-Onboarding Checklist
 
 Before importing a new operator with hundreds of trucks or thousands of containers:

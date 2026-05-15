@@ -3,12 +3,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
-function rateLimit(ip: string, limit: number, windowMs: number): boolean {
+function rateLimit(key: string, limit: number, windowMs: number): boolean {
   const now = Date.now()
-  const entry = rateLimitMap.get(ip)
+  const entry = rateLimitMap.get(key)
 
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs })
     return true
   }
 
@@ -17,16 +17,31 @@ function rateLimit(ip: string, limit: number, windowMs: number): boolean {
   return true
 }
 
+function rateLimitResponse() {
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again in a minute.' },
+    { status: 429, headers: { 'Retry-After': '60' } }
+  )
+}
+
 export async function proxy(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown'
   const path = request.nextUrl.pathname
 
-  if (path.startsWith('/auth/') && request.method === 'POST' && !rateLimit(ip, 10, 60_000)) {
-    return new NextResponse('Too many requests.', { status: 429, headers: { 'Retry-After': '60' } })
+  if ((path.startsWith('/api/auth/') || path.startsWith('/auth/')) && request.method === 'POST' && !rateLimit(`auth:${ip}`, 5, 60_000)) {
+    return rateLimitResponse()
   }
 
-  if (path.startsWith('/api/') && !rateLimit(ip, 60, 60_000)) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  if (path.startsWith('/api/customer/') && !rateLimit(`customer:${ip}`, 30, 60_000)) {
+    return rateLimitResponse()
+  }
+
+  if (path.startsWith('/api/operator/') && !rateLimit(`operator:${ip}`, 120, 60_000)) {
+    return rateLimitResponse()
+  }
+
+  if (path.startsWith('/api/') && !rateLimit(`api:${ip}`, 60, 60_000)) {
+    return rateLimitResponse()
   }
 
   const ua = request.headers.get('user-agent') || ''

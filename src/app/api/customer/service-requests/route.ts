@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const rate = await checkRateLimit({
     key: `customer-service:${user.id}:${getClientIp(request)}`,
     limit: 30,
-    windowSeconds: 60 * 60,
+    windowSeconds: 60,
     route: '/api/customer/service-requests',
     userId: user.id,
   })

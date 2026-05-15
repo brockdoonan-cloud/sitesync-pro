@@ -2,6 +2,12 @@
 
 This audit documents the request shape expected by each API route. Routes marked `zod` validate with a runtime schema. Routes marked `guarded parser` validate fields manually with explicit rejects for malformed input.
 
+Rate limiting is implemented in two layers:
+
+- App proxy (`src/proxy.ts`): `/api/auth/*` and `/auth/*` POST = 5 req/min per IP, `/api/customer/*` = 30 req/min per IP, `/api/operator/*` = 120 req/min per IP, all other `/api/*` = 60 req/min per IP.
+- Route helper (`src/lib/rateLimit.ts`): Upstash Redis when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` exist; in-memory fallback when they do not.
+- Database RPC limiter (`supabase/migrations/0018_public_quote_rpc_rate_limit.sql`): `create_quote_request_with_matches` = 10 req/min per IP using PostgREST request headers.
+
 | Route | Methods | Validation | Request schema |
 |---|---|---|---|
 | `/api/admin/site-doctor` | `GET` | auth guard | No body. Super admin/operator admin only. |
@@ -27,5 +33,6 @@ This audit documents the request shape expected by each API route. Routes marked
 | `/api/truck-tracking/import` | `POST` | guarded parser | `{ rows: TrackingImportRow[], provider_id?: uuid }` |
 | `/api/truck-tracking/integrations` | `POST` | guarded parser | Provider metadata: name, auth type, base URL, external account id, notes. |
 | `/api/truck-tracking/webhook/[token]` | `POST` | token guard | Tracking provider webhook payload. |
+| `/rest/v1/rpc/create_quote_request_with_matches` | `POST` | SQL rate limit | Public Supabase RPC. Limit: 10 req/min per IP after migration `0018_public_quote_rpc_rate_limit.sql` is applied. |
 
 Hardening rule going forward: new mutating endpoints should use `zod` first, then rate limit, then auth/tenant checks, then write. Existing guarded-parser routes are documented here and should be converted to `zod` as they are touched.
