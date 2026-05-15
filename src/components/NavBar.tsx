@@ -42,6 +42,9 @@ export default function NavBar({ user, profile }: { user: any; profile: any }) {
     { href: '/dashboard/operator/import', label: t('import') },
     { href: '/dashboard/operator/coverage', label: t('coverage') },
     { href: '/dashboard/operator/pricing', label: t('pricing') },
+    { href: '/dashboard/operator/settings/drivers', label: 'Drivers' },
+    { href: '/dashboard/operator/settings/equipment', label: 'Types' },
+    { href: '/dashboard/operator/settings/services', label: 'Services' },
   ]
   const custLinks = [
     { href: '/dashboard/customer', label: t('overview') },

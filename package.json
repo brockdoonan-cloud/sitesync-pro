@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "node node_modules/eslint/bin/eslint.js src --ext .ts,.tsx",
     "seed:zip-lookup": "node scripts/seed_zip_lookup.mjs",
+    "sentry:alerts": "node scripts/create_sentry_alerts.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },

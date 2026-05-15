@@ -20,8 +20,11 @@ const nextConfig = {
 module.exports = withSentryConfig(nextConfig, {
   silent: true,
   telemetry: false,
+  org: process.env.SENTRY_ORG || 'sitesync-pro',
+  project: process.env.SENTRY_PROJECT || 'sitesync-pro',
+  authToken: process.env.SENTRY_AUTH_TOKEN || process.env.SENTRY_API_TOKEN,
   sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
+    disable: !(process.env.SENTRY_AUTH_TOKEN || process.env.SENTRY_API_TOKEN),
   },
 }, {
   disableLogger: true,

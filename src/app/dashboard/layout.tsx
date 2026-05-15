@@ -14,6 +14,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', user.id)
     .single()
   const org = await getCurrentOrg()
+  if (org?.isDriver) {
+    return (
+      <div className="min-h-screen bg-slate-950">
+        <main className="mx-auto max-w-4xl px-4 py-5">
+          {children}
+        </main>
+      </div>
+    )
+  }
   const navProfile = {
     ...(profile || {}),
     role: org?.isOperator ? 'operator' : profile?.role,

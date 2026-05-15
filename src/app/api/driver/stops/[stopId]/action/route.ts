@@ -94,6 +94,54 @@ async function updateEquipmentByBin(supabase: any, organizationId: string, binNu
   return data || null
 }
 
+async function createOneTimeFeeForStop(supabase: any, stop: any, chargeType: 'delivery_fee' | 'pickup_fee' | 'relocate_fee', binNumber: string | null, eventDate: string) {
+  if (!binNumber) return
+  const { data: equipment } = await supabase
+    .from('equipment')
+    .select('id,equipment_type_id,client_id')
+    .eq('organization_id', stop.organization_id)
+    .eq('bin_number', binNumber)
+    .maybeSingle()
+  if (!equipment?.equipment_type_id) return
+
+  let rateQuery = supabase
+    .from('billing_rates')
+    .select('delivery_fee,pickup_fee,relocate_fee')
+    .eq('organization_id', stop.organization_id)
+    .eq('equipment_type_id', equipment.equipment_type_id)
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const targetClient = stop.client_id || equipment.client_id
+  rateQuery = targetClient
+    ? rateQuery.or(`client_id.eq.${targetClient},client_id.is.null`).order('client_id', { ascending: false, nullsFirst: false })
+    : rateQuery.is('client_id', null)
+
+  const { data: rate } = await rateQuery
+    .maybeSingle()
+
+  const amount = Number(rate?.[chargeType] || 0)
+  if (!amount) return
+
+  await supabase.from('billing_events').insert({
+    organization_id: stop.organization_id,
+    equipment_id: equipment.id,
+    client_id: stop.client_id || equipment.client_id || null,
+    job_id: stop.job_id || null,
+    route_stop_id: stop.id,
+    event_date: eventDate,
+    charge_type: chargeType,
+    event_type: chargeType,
+    amount,
+    note: `${chargeType.replace(/_/g, ' ')} from driver closeout.`,
+    status: 'pending_review',
+    source_file: 'driver_route_closeout',
+    bin_number: binNumber,
+    payload: { route_stop_id: stop.id, charge_type: chargeType },
+  })
+}
+
 function gpsColumns(body: any, latColumn: string, lngColumn: string) {
   const lat = Number(body?.lat)
   const lng = Number(body?.lng)
@@ -104,7 +152,7 @@ function gpsColumns(body: any, latColumn: string, lngColumn: string) {
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
-  if (!org.isOperator) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
+  if (!org.isOperator && !org.isDriver) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
 
   const { stopId } = await params
   const body = await request.json().catch(() => ({}))
@@ -131,6 +179,17 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   if (stopError || !stop) return NextResponse.json({ error: 'Stop not found.' }, { status: 404 })
   if (!canAccess(org, stop)) return NextResponse.json({ error: 'Stop is outside your organization.' }, { status: 403 })
+  if (org.isDriver) {
+    const { data: driver } = await supabase.from('drivers').select('id,truck_id').eq('user_id', org.user.id).eq('active', true).maybeSingle()
+    const { data: route } = await supabase.from('driver_routes').select('driver_profile_id,truck_id').eq('id', stop.route_id).maybeSingle()
+    if (!driver || !route || (route.driver_profile_id && route.driver_profile_id !== driver.id) || (route.truck_id && route.truck_id !== driver.truck_id)) {
+      return NextResponse.json({ error: 'This stop is not assigned to your truck.' }, { status: 403 })
+    }
+    const { data: shift } = await supabase.from('driver_shifts').select('id').eq('driver_id', driver.id).is('clocked_out_at', null).maybeSingle()
+    if (!shift && action === 'complete') {
+      return NextResponse.json({ error: 'Clock in to start your shift before completing stops.' }, { status: 409 })
+    }
+  }
 
   try {
     if (action === 'eta' || action === 'en_route') {
@@ -216,6 +275,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           status: 'completed',
           completed_at: now,
           proof_notes: body?.proof_notes ? String(body.proof_notes) : stop.proof_notes || null,
+          capture_data: body?.capture_data && typeof body.capture_data === 'object' ? body.capture_data : stop.capture_data || {},
           completed_by_user_id: org.user.id,
           ...gpsColumns(body, 'completed_lat', 'completed_lng'),
         })
@@ -307,6 +367,15 @@ export async function POST(request: NextRequest, { params }: Params) {
             completed_at: now,
           },
         })
+      }
+
+      const stopTypeForFee = String(stop.stop_type || '').toLowerCase()
+      if (stopTypeForFee.includes('deliver') || (deliveryBin && !pickupBin)) {
+        await createOneTimeFeeForStop(supabase, stop, 'delivery_fee', deliveryBin || pickupBin, now.slice(0, 10))
+      } else if (stopTypeForFee.includes('pickup') || (pickupBin && !deliveryBin)) {
+        await createOneTimeFeeForStop(supabase, stop, 'pickup_fee', pickupBin, now.slice(0, 10))
+      } else if (stopTypeForFee.includes('relocate')) {
+        await createOneTimeFeeForStop(supabase, stop, 'relocate_fee', pickupBin || deliveryBin, now.slice(0, 10))
       }
 
       const nextStop = stop.route_id ? await nextOpenStop(supabase, stop.route_id) : null

@@ -118,8 +118,9 @@ async function extractTextWithAnthropic(
               type: 'text',
               text: [
                 `Transcribe ${options.fileName} as clean plain text for SiteSync Pro billing import.`,
-                'This is a customer profile sheet, signed pricing agreement, or job paperwork for an equipment/container rental company.',
-                'Preserve labels, dollar amounts, checkboxes, addresses, emails, phone numbers, job names, PO numbers, signatures, dates, and fee wording.',
+                'This may be a customer profile sheet, signed pricing agreement, job paperwork, dumpster contract, porta-john service agreement, equipment quote, or credit application.',
+                'Extract semantically, not by visual position. The same field may appear with different labels: service rate, per-service charge, monthly bin rate, swap rate, pump-out rate, rental rate, delivery fee, pickup fee, relocate fee, fuel surcharge, environmental fee, billing terms, credit limit, signature date.',
+                'Preserve labels, dollar amounts, checkboxes, addresses, emails, phone numbers, job names, PO numbers, signatures, dates, and fee wording. If a field is absent, leave it absent; do not invent values.',
                 'Return only the plain text from the document. Do not summarize and do not add markdown.',
               ].join('\n'),
             },
@@ -507,7 +508,7 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
   const billingContactPhone = valueAfter(customerLines, ["BILLING CONTACT'S PHONE NUMBER", 'BILLING CONTACTS PHONE NUMBER'])
 
   const pricing = {
-    oneBinService: moneyTerm(normalized, 'Using 1 bin at a time', [/USING\s+1\s+BIN\s+AT\s+A\s+TIME[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 395, 'per_service'),
+    oneBinService: moneyTerm(normalized, 'Using 1 bin at a time', [/USING\s+1\s+BIN\s+AT\s+A\s+TIME[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i, /(?:SERVICE|SWAP|DROP|MONTHLY|RENTAL)\s+RATE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i, /PER\s+(?:SERVICE|SWAP|PICKUP|DROP)[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 395, 'per_service'),
     twoBinService: moneyTerm(normalized, 'Using 2 bins at a time', [/USING\s+2\s+BINS[\s\S]{0,160}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_service'),
     waterPumpout: moneyTerm(normalized, 'Bin pumpout - water', [/BIN\s+PUMPOUT\s*-\s*WATER[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_pumpout'),
     slurryPumpout: moneyTerm(normalized, 'Bin pumpout - slurry / paint', [/BIN\s+PUMPOUT\s*-\s*SLURRY[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'per_pumpout'),
@@ -516,9 +517,9 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
     relocate: moneyTerm(normalized, 'Bin relocate', [/BIN\s+RELOCATE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
     onsiteRelocate: moneyTerm(normalized, 'Onsite relocation', [/RELOCATION\s+if\s+onsite[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
     sameDayWeekendFee: moneyTerm(normalized, 'Same day / nights / weekends', [/SAME\s+DAY[\s\S]{0,100}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
-    monthlyUsage: moneyTerm(normalized, 'Monthly bin usage fee', [/BIN\s+USAGE\s+FEE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 150, 'per_bin_month'),
-    environmentalFee: moneyTerm(normalized, 'Environmental service fee', [/ENVIRONMENTAL\s+SERVICE\s+FEE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 25, 'per_service'),
-    fuelSurchargePercent: percentTerm(normalized, 'Fuel surcharge percent', [/FUEL\s+SURCHARGE[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*%/i], 0),
+    monthlyUsage: moneyTerm(normalized, 'Monthly bin usage fee', [/BIN\s+USAGE\s+FEE[\s\S]{0,50}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i, /MONTHLY\s+(?:USAGE|RENTAL|RATE|CHARGE)[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 150, 'per_bin_month'),
+    environmentalFee: moneyTerm(normalized, 'Environmental service fee', [/ENVIRONMENTAL\s+SERVICE\s+FEE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i, /ENV(?:IRONMENTAL)?\s+FEE[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], 25, 'per_service'),
+    fuelSurchargePercent: percentTerm(normalized, 'Fuel surcharge percent', [/FUEL\s+SURCHARGE[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*%/i, /FSC[\s\S]{0,40}?(\d+(?:\.\d+)?)\s*%/i], 0),
     overloadedFee: moneyTerm(normalized, 'Container overloaded fee', [/CONTAINER\s+OVERLOADED[\s\S]{0,120}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
     standbyThirtyToFortyFive: moneyTerm(normalized, 'Stand-by 31-45 minutes', [/31\s*-\s*45\s+min\w*[\s\S]{0,60}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
     standbyFortySixToSixty: moneyTerm(normalized, 'Stand-by 46-60 minutes', [/46\s*-\s*60\s+min\w*[\s\S]{0,80}?\$\s*([\d,\s]+(?:\.\d{1,2})?)/i], null, 'conditional'),
@@ -577,6 +578,9 @@ export function extractProfileSheetTerms(text: string, fileName: string): Profil
     },
     warnings: [],
     sourceTextExcerpt: lines.slice(0, 120).join('\n').slice(0, 7000),
+    ocrRawResponse: { textExcerpt: lines.slice(0, 180).join('\n').slice(0, 12000) },
+    ocrModelVersion: process.env.ANTHROPIC_MODEL || 'local-parser',
+    ocrConfidenceNotes: 'Generic semantic parser: review low-confidence and defaulted fields before saving.',
   }
 
   if (billingContactPhone && !extraction.customer.mainPhone) extraction.customer.mainPhone = normalizePhone(billingContactPhone)

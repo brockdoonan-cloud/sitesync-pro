@@ -11,6 +11,7 @@ export type CurrentOrg = {
   role: OrgRole | 'operator' | 'customer'
   isSuperAdmin: boolean
   isOperator: boolean
+  isDriver: boolean
   isClient: boolean
 }
 
@@ -46,7 +47,8 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
       organizationName: organization?.name || null,
       role,
       isSuperAdmin: role === 'super_admin',
-      isOperator: ['super_admin', 'operator_admin', 'operator_member', 'driver'].includes(role),
+      isOperator: ['super_admin', 'operator_admin', 'operator_member'].includes(role),
+      isDriver: role === 'driver',
       isClient: role === 'client',
     }
     setSentryUserContext({ userId: user.id, organizationId: currentOrg.organizationId, role: currentOrg.role })
@@ -68,6 +70,7 @@ export async function getCurrentOrg(): Promise<CurrentOrg | null> {
     role: fallbackOperator ? 'operator' : 'customer',
     isSuperAdmin: user.email?.toLowerCase() === 'brock.doonan@gmail.com',
     isOperator: fallbackOperator,
+    isDriver: false,
     isClient: !fallbackOperator,
   }
   setSentryUserContext({ userId: user.id, organizationId: fallbackOrg.organizationId, role: fallbackOrg.role })

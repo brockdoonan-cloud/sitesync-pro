@@ -38,7 +38,7 @@ async function insertWithFallbacks(supabase: any, payloads: Record<string, unkno
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
-  if (!org.isOperator) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
+  if (!org.isOperator && !org.isDriver) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
 
   const { stopId } = await params
   const supabase = createAdminClient() || await createClient()
@@ -51,6 +51,13 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (stopError || !stop) return NextResponse.json({ error: 'Stop not found.' }, { status: 404 })
   if (!org.isSuperAdmin && stop.organization_id !== org.organizationId) {
     return NextResponse.json({ error: 'Stop is outside your organization.' }, { status: 403 })
+  }
+  if (org.isDriver) {
+    const { data: driver } = await supabase.from('drivers').select('id,truck_id').eq('user_id', org.user.id).eq('active', true).maybeSingle()
+    const { data: route } = await supabase.from('driver_routes').select('driver_profile_id,truck_id').eq('id', stop.route_id).maybeSingle()
+    if (!driver || !route || (route.driver_profile_id && route.driver_profile_id !== driver.id) || (route.truck_id && route.truck_id !== driver.truck_id)) {
+      return NextResponse.json({ error: 'This stop is not assigned to your truck.' }, { status: 403 })
+    }
   }
 
   try {

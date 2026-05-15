@@ -3,14 +3,14 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Building2, CheckCircle2, HardHat } from 'lucide-react'
+import { Building2, CheckCircle2, HardHat, Truck } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n'
 
-type PortalType = 'operator' | 'customer'
+type PortalType = 'operator' | 'customer' | 'driver'
 
 export default function LoginPage() {
   const { t } = useLanguage()
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [loading, setLoading] = useState(false)
   const [portal, setPortal] = useState<PortalType>('operator')
   const router = useRouter(); const supabase = createClient()
   const choosePortal = (nextPortal: PortalType) => {
@@ -22,14 +22,23 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const requestedPortal = params.get('portal')
-    if (requestedPortal === 'customer' || requestedPortal === 'operator') choosePortal(requestedPortal)
+    if (requestedPortal === 'customer' || requestedPortal === 'operator' || requestedPortal === 'driver') choosePortal(requestedPortal)
   }, [])
 
   const handleLogin = async () => {
-    if (!email || !password) { setError(t('allFieldsRequired')); return }
-    setLoading(true); setError('')
+    if (!email || (portal !== 'driver' && !password)) { setError(t('allFieldsRequired')); return }
+    setLoading(true); setError(''); setNotice('')
     window.localStorage.setItem('sitesync-portal-mode', portal)
     document.cookie = `sitesync-portal-mode=${portal}; path=/; max-age=2592000; SameSite=Lax`
+    if (portal === 'driver') {
+      const redirectTo = `${window.location.origin}/auth/callback?next=/dashboard/driver`
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } })
+      if (error) { setError(error.message); setLoading(false); return }
+      setLoading(false)
+      setError('')
+      setNotice('Magic link sent. Check your email and open the driver sign-in link.')
+      return
+    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
 
@@ -61,6 +70,13 @@ export default function LoginPage() {
       description: t('customerPortalDesc'),
       icon: Building2,
       helper: t('customerLoginHelper'),
+    },
+    {
+      id: 'driver' as const,
+      label: 'Driver Portal',
+      description: 'Magic-link route access for assigned truck drivers.',
+      icon: Truck,
+      helper: 'Enter your driver email and we will send a secure sign-in link. No password is needed for driver accounts.',
     },
   ]
 
@@ -108,13 +124,15 @@ export default function LoginPage() {
 
           <div className="card space-y-4">
             <div>
-              <div className="text-sm text-sky-300 font-semibold">{portal === 'customer' ? t('customerPortal') : t('operatorPortal')}</div>
+              <div className="text-sm text-sky-300 font-semibold">{portal === 'customer' ? t('customerPortal') : portal === 'driver' ? 'Driver Portal' : t('operatorPortal')}</div>
               <p className="text-slate-400 text-sm mt-1">{selectedPortal.helper}</p>
             </div>
             {error && <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm rounded-lg px-4 py-3">{error}</div>}
+            {notice && <div className="bg-green-500/10 border border-green-500/30 text-green-300 text-sm rounded-lg px-4 py-3">{notice}</div>}
             <div><label className="block text-sm font-medium text-slate-300 mb-1.5">{t('email')}</label><input type="email" className="input" placeholder={portal === 'customer' ? 'customer@company.com' : 'you@company.com'} value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1.5">{t('password')}</label><input type="password" className="input" placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>
-            <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">{loading ? t('signingIn') : `${t('signIn')} - ${portal === 'customer' ? t('customerPortal') : t('operatorPortal')}`}</button>
+            {portal !== 'driver' && <div><label className="block text-sm font-medium text-slate-300 mb-1.5">{t('password')}</label><input type="password" className="input" placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()}/></div>}
+            <button onClick={handleLogin} disabled={loading} className="btn-primary w-full py-3">{loading ? t('signingIn') : portal === 'driver' ? 'Send Driver Magic Link' : `${t('signIn')} - ${portal === 'customer' ? t('customerPortal') : t('operatorPortal')}`}</button>
+            {portal === 'driver' && <p className="text-slate-500 text-xs text-center">Check your email, open the magic link, and you will land directly on your assigned route.</p>}
             {portal === 'customer' && <p className="text-slate-500 text-xs text-center">{t('customerAccessNote')}</p>}
             <p className="text-center text-slate-400 text-sm">{t('noAccount')} {' '}<Link href="/auth/signup" className="text-sky-400 hover:text-sky-300 font-medium">{t('signUp')}</Link></p>
           </div>

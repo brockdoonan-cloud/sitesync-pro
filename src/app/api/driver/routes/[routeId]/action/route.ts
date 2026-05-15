@@ -33,7 +33,7 @@ async function markDeliveryBinInTransit(supabase: any, organizationId: string, s
 export async function POST(request: NextRequest, { params }: Params) {
   const org = await getCurrentOrg()
   if (!org) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
-  if (!org.isOperator) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
+  if (!org.isOperator && !org.isDriver) return NextResponse.json({ error: 'Driver/operator access required.' }, { status: 403 })
 
   const { routeId } = await params
   const body = await request.json().catch(() => ({}))
@@ -60,6 +60,16 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   if (routeError || !route) return NextResponse.json({ error: 'Route not found.' }, { status: 404 })
   if (!canAccessRoute(org, route)) return NextResponse.json({ error: 'Route is outside your organization.' }, { status: 403 })
+  if (org.isDriver) {
+    const { data: driver } = await supabase.from('drivers').select('id,truck_id').eq('user_id', org.user.id).eq('active', true).maybeSingle()
+    if (!driver || (route.driver_profile_id && route.driver_profile_id !== driver.id) || (route.truck_id && route.truck_id !== driver.truck_id)) {
+      return NextResponse.json({ error: 'This route is not assigned to your truck.' }, { status: 403 })
+    }
+    const { data: shift } = await supabase.from('driver_shifts').select('id').eq('driver_id', driver.id).is('clocked_out_at', null).maybeSingle()
+    if (!shift && (action === 'open' || action === 'start')) {
+      return NextResponse.json({ error: 'Clock in before opening your route.' }, { status: 409 })
+    }
+  }
 
   try {
     if (action === 'open' || action === 'start') {

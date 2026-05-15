@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { money } from '@/lib/pricing'
+import { createClient } from '@/lib/supabase/client'
 import type { BillingChargeMode, ProfileSheetExtraction } from '@/lib/billing/profileSheetTypes'
 
 type PricingKey = keyof ProfileSheetExtraction['pricing']
+type TypeOption = { id: string; label: string; code?: string | null }
 
 const pricingFields: Array<{ key: PricingKey; label: string; suffix?: string }> = [
   { key: 'oneBinService', label: 'Drop / swap / pickup rate' },
@@ -205,8 +207,21 @@ export default function ProfileSheetImportPage() {
   const [archiving, setArchiving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [equipmentTypes, setEquipmentTypes] = useState<TypeOption[]>([])
+  const [serviceTypes, setServiceTypes] = useState<TypeOption[]>([])
 
   const previewTotal = useMemo(() => extraction?.preview.total || 0, [extraction])
+
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all([
+      supabase.from('equipment_types').select('id,label,code').eq('active', true).order('sort_order', { ascending: true }),
+      supabase.from('service_types').select('id,label,code').eq('active', true).order('sort_order', { ascending: true }),
+    ]).then(([equipment, services]) => {
+      setEquipmentTypes((equipment.data || []) as TypeOption[])
+      setServiceTypes((services.data || []) as TypeOption[])
+    })
+  }, [])
 
   const upload = async (file?: File) => {
     if (!file) return
@@ -427,6 +442,14 @@ export default function ProfileSheetImportPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <input className="input sm:col-span-2" value={extraction.job.jobsiteName} onChange={event => updateJob('jobsiteName', event.target.value)} placeholder="Jobsite name" />
+                <select className="input" value={extraction.job.equipmentTypeId || ''} onChange={event => updateJob('equipmentTypeId', event.target.value)}>
+                  <option value="">Equipment type</option>
+                  {equipmentTypes.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
+                </select>
+                <select className="input" value={extraction.job.serviceTypeId || ''} onChange={event => updateJob('serviceTypeId', event.target.value)}>
+                  <option value="">Service type</option>
+                  {serviceTypes.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
+                </select>
                 <input className="input sm:col-span-2" value={extraction.job.jobsiteAddress} onChange={event => updateJob('jobsiteAddress', event.target.value)} placeholder="Jobsite address" />
                 <input className="input" value={extraction.job.jobsiteCity} onChange={event => updateJob('jobsiteCity', event.target.value)} placeholder="City" />
                 <input className="input" value={extraction.job.jobsiteZip} onChange={event => updateJob('jobsiteZip', event.target.value)} placeholder="ZIP" />

@@ -15,6 +15,21 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
+      let roleRedirect = next
+      if (user?.id) {
+        const { data: memberships } = await supabase
+          .from('organization_members')
+          .select('role')
+          .eq('user_id', user.id)
+        const roles = new Set((memberships || []).map((membership: any) => membership.role))
+        if (roles.has('driver')) {
+          roleRedirect = '/dashboard/driver'
+          const admin = createAdminClient()
+          await admin?.from('drivers').update({ first_login_at: new Date().toISOString() }).eq('user_id', user.id).is('first_login_at', null)
+        } else if (roles.has('super_admin')) roleRedirect = '/dashboard/admin'
+        else if (roles.has('operator_admin') || roles.has('operator_member')) roleRedirect = '/dashboard/operator'
+        else if (roles.has('client')) roleRedirect = '/dashboard/customer'
+      }
       const customerAccessCode = user?.user_metadata?.customer_access_code
       if (user?.id && customerAccessCode) {
         const admin = createAdminClient()
@@ -42,7 +57,7 @@ export async function GET(request: NextRequest) {
         resourceId: user?.id || null,
         request,
       })
-      return NextResponse.redirect(`${origin}${next}`)
+      return NextResponse.redirect(`${origin}${roleRedirect}`)
     }
   }
 

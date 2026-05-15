@@ -33,6 +33,8 @@ export type ProfileSheetExtraction = {
     additionalBillingEmails: string[]
   }
   job: {
+    equipmentTypeId?: string
+    serviceTypeId?: string
     jobsiteName: string
     jobNumber: string
     poNumber: string
@@ -77,6 +79,9 @@ export type ProfileSheetExtraction = {
   preview: BillingPreview
   warnings: string[]
   sourceTextExcerpt: string
+  ocrRawResponse?: unknown
+  ocrModelVersion?: string
+  ocrConfidenceNotes?: string
 }
 
 export type BillingRule = {

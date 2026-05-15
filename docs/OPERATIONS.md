@@ -8,6 +8,10 @@ Launch requirement: upgrade the production Supabase project to Pro and confirm d
 
 Production project: `odviemgfhdmskhvdgjvy`.
 
+## Required Runtime Secrets
+
+- `CRON_SECRET`: random 32+ character string used to protect `/api/cron/run-billing`. Add it to Vercel Production and Preview before enabling the nightly billing cron.
+
 Pre-hardening baseline snapshot:
 
 - Status: dashboard action required
@@ -114,9 +118,9 @@ Screenshot placeholders:
 - `RESEND_FROM_EMAIL`
 - `SENTRY_DSN`
 - `NEXT_PUBLIC_SENTRY_DSN`
-- `SENTRY_AUTH_TOKEN` for source map uploads
-- `SENTRY_ORG` for source map uploads and future admin error panels
-- `SENTRY_PROJECT` for source map uploads and future admin error panels
+- `SENTRY_API_TOKEN` or `SENTRY_AUTH_TOKEN` for source map uploads and alert-rule automation
+- `SENTRY_ORG` for source map uploads, Site Doctor, and alert-rule automation
+- `SENTRY_PROJECT` for source map uploads, Site Doctor, and alert-rule automation
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
@@ -139,13 +143,25 @@ Expected healthy response:
 
 ## Sentry Alerts
 
+Sentry is wired through `@sentry/nextjs`, `instrumentation.ts`, `instrumentation-client.ts`, `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`, and the `withSentryConfig` wrapper in `next.config.js`.
+
+After `NEXT_PUBLIC_SENTRY_DSN` is added and production redeploys, open `/sentry-debug` once. It intentionally throws `Sentry debug route test error`; confirm that issue appears in the Sentry project.
+
 Create these rules in Sentry project `sitesync-pro/sitesync-pro`:
 
 1. Event frequency: when more than 10 events occur in 1 minute in production, email `brock.doonan@gmail.com`.
 2. New issue: when a new issue first appears in production, email `brock.doonan@gmail.com`.
 3. Aging unresolved issue: when an issue remains unresolved for 24 hours and has more than 50 occurrences, email `brock.doonan@gmail.com`.
 
-The Site Doctor reads recent events through `SENTRY_API_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`. Alert delivery is still configured in Sentry's dashboard, not in application code.
+Alert-rule automation script:
+
+```bash
+SENTRY_API_TOKEN=<token> SENTRY_ORG=sitesync-pro SENTRY_PROJECT=sitesync-pro node scripts/create_sentry_alerts.mjs
+```
+
+The high-spike rule uses Sentry's metric-alert percentage comparison API: 900% higher than the prior hour is the closest API equivalent to "10x rolling hourly average." The unresolved-24h rule fires on the next error event for an issue older than 24 hours; Sentry's legacy issue-alert API is event-triggered, not a background scheduler.
+
+The Site Doctor reads recent events through `SENTRY_API_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`.
 
 ## Supabase Auth Password Protection
 

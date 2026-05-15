@@ -31,6 +31,7 @@ type ServiceRequest = {
   client_id?: string | null
   job_id?: string | null
   service_type?: string | null
+  service_type_id?: string | null
   jobsite_address?: string | null
   service_address?: string | null
   bin_number?: string | null
@@ -48,6 +49,7 @@ type Truck = {
   id: string
   truck_number: string
   driver: string
+  driverProfileId?: string | null
   status: 'available' | 'en_route' | 'servicing' | 'returning'
   capacity: number
   lat: number
@@ -74,6 +76,7 @@ type SavedRouteStop = {
   route_id: string
   stop_order: number
   service_request_id?: string | null
+  service_type_id?: string | null
   job_id?: string | null
   client_id?: string | null
   address?: string | null
@@ -95,6 +98,8 @@ type SavedDriverRoute = {
   id: string
   route_date?: string | null
   truck_number?: string | null
+  truck_id?: string | null
+  driver_profile_id?: string | null
   driver_name?: string | null
   status?: string | null
   opened_at?: string | null
@@ -647,7 +652,7 @@ export default function RoutesPage() {
     setLoading(true)
     setMessage('')
     const today = new Date().toISOString().slice(0, 10)
-    const [jobsites, equipment, truckRows, serviceRequests, driverRoutes] = await Promise.all([
+    const [jobsites, equipment, truckRows, driverRows, serviceRequests, driverRoutes] = await Promise.all([
       fetchAllRows<Jobsite>((from, to) =>
         supabase.from('jobsites').select('id,name,address,city,state,zip,lat,lng,status').order('status', { ascending: true }).range(from, to)
       ),
@@ -657,10 +662,13 @@ export default function RoutesPage() {
       fetchAllRows<any>((from, to) =>
         supabase.from('trucks').select('id,truck_number,status').order('truck_number', { ascending: true }).range(from, to)
       ),
+      fetchAllRows<any>((from, to) =>
+        supabase.from('drivers').select('id,truck_id,full_name,active').eq('active', true).range(from, to)
+      ),
       fetchAllRows<ServiceRequest>((from, to) =>
         supabase
           .from('service_requests')
-          .select('id,client_id,job_id,service_type,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
+          .select('id,client_id,job_id,service_type,service_type_id,jobsite_address,service_address,bin_number,status,preferred_date,scheduled_date,priority,notes,jobsite_id')
           .in('status', ['dispatch_ready', 'pending', 'scheduled', 'confirmed', 'in_progress'])
           .order('created_at', { ascending: false })
           .range(from, to)
@@ -668,7 +676,7 @@ export default function RoutesPage() {
       fetchAllRows<SavedDriverRoute>((from, to) =>
         supabase
           .from('driver_routes')
-          .select('id,route_date,truck_number,driver_name,status,opened_at,closed_at,current_stop_id,last_eta_at,estimated_minutes,total_miles')
+          .select('id,route_date,truck_id,driver_profile_id,truck_number,driver_name,status,opened_at,closed_at,current_stop_id,last_eta_at,estimated_minutes,total_miles')
           .eq('route_date', today)
           .in('status', ['planned', 'in_progress', 'ready_to_close'])
           .order('truck_number', { ascending: true })
@@ -681,7 +689,7 @@ export default function RoutesPage() {
       ? await fetchAllRows<SavedRouteStop>((from, to) =>
           supabase
             .from('route_stops')
-            .select('id,route_id,stop_order,service_request_id,job_id,client_id,address,bin_numbers,stop_type,status,eta,eta_minutes,arrived_at,completed_at,notes')
+            .select('id,route_id,stop_order,service_request_id,service_type_id,job_id,client_id,address,bin_numbers,stop_type,status,eta,eta_minutes,arrived_at,completed_at,notes')
             .in('route_id', routeIds)
             .order('stop_order', { ascending: true })
             .range(from, to)
@@ -733,16 +741,20 @@ export default function RoutesPage() {
 
     const mapped = [...requestStops, ...mappedSites]
 
-    const liveTrucks = (truckRows || []).map((truck: any, index: number) => ({
+    const driverByTruck = new Map((driverRows || []).filter((driver: any) => driver.truck_id).map((driver: any) => [driver.truck_id, driver]))
+    const liveTrucks = (truckRows || []).map((truck: any, index: number) => {
+      const driver = driverByTruck.get(truck.id)
+      return ({
       id: truck.id,
       truck_number: truck.truck_number || String(index + 1),
-      driver: `Driver ${index + 1}`,
+      driver: driver?.full_name || `Driver ${index + 1}`,
+      driverProfileId: driver?.id || null,
       status: index === 0 ? 'en_route' : index === 1 ? 'servicing' : 'available',
       capacity: 6 + index,
       lat: HOME_BASE.lat + index * 0.08,
       lng: HOME_BASE.lng + index * 0.06,
       progress: 0.12 + index * 0.17,
-    })) as Truck[]
+    })}) as Truck[]
 
     if (mapped.length > 0) {
       setSites(mapped)
@@ -828,10 +840,15 @@ export default function RoutesPage() {
       let routeCount = 0
       let stopCount = 0
       for (const route of routes.filter(item => item.stops.length > 0)) {
+        if (!route.truck.driverProfileId) {
+          throw new Error(`Assign a truck to ${route.truck.driver || `Truck ${route.truck.truck_number}`} first.`)
+        }
         const { data: savedRoute, error: routeError } = await supabase
           .from('driver_routes')
           .insert({
             route_date: today,
+            truck_id: route.truck.id,
+            driver_profile_id: route.truck.driverProfileId,
             truck_number: route.truck.truck_number,
             driver_name: route.truck.driver,
             status: 'planned',
@@ -853,6 +870,7 @@ export default function RoutesPage() {
           service_request_id: stop.request?.id || null,
           job_id: stop.request?.job_id || null,
           client_id: stop.request?.client_id || null,
+          service_type_id: stop.request?.service_type_id || null,
           address: addressFor(stop),
           lat: roughCoord(stop).lat,
           lng: roughCoord(stop).lng,

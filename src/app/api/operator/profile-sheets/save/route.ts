@@ -150,6 +150,8 @@ async function findOrCreateJob(
     jobsite_contact_name: extraction.job.jobsiteContactName || null,
     jobsite_contact_phone: extraction.job.jobsiteContactPhone || null,
     jobsite_contact_email: extraction.job.jobsiteContactEmail || null,
+    equipment_type_id: extraction.job.equipmentTypeId || null,
+    service_type_id: extraction.job.serviceTypeId || null,
     status: 'active',
     notes: `Imported from profile sheet: ${extraction.fileName}`,
   }
@@ -158,6 +160,8 @@ async function findOrCreateJob(
     client_id: clientId,
     job_name: jobName,
     jobsite_address: jobsiteAddress || extraction.job.jobsiteAddress || null,
+    equipment_type_id: extraction.job.equipmentTypeId || null,
+    service_type_id: extraction.job.serviceTypeId || null,
     status: 'active',
   }
   const schedulePayload = {
@@ -239,6 +243,9 @@ export async function POST(request: NextRequest) {
       fee_settings: extraction.feeSettings,
       billing_preview: extraction.preview,
       source_text_excerpt: extraction.sourceTextExcerpt || null,
+      ocr_raw_response: extraction.ocrRawResponse || null,
+      ocr_model_version: extraction.ocrModelVersion || null,
+      ocr_confidence_notes: extraction.ocrConfidenceNotes || null,
       import_source: source,
       active: true,
       created_by_user_id: org.user.id,
@@ -307,6 +314,29 @@ export async function POST(request: NextRequest) {
     const pricingResult = await insertWithFallbacks(supabase, 'pricing_profiles', [pricingPayload, pricingOrgFallback, pricingFallback])
     if (pricingResult.error) {
       warnings.push(`Pricing profile was not saved: ${pricingResult.error.message}`)
+    }
+
+    const equipmentTypeId = extraction.job.equipmentTypeId || null
+    if (equipmentTypeId) {
+      const monthlyRate = chargeValue(extraction.pricing.monthlyUsage, 0) || chargeValue(extraction.pricing.oneBinService, 395)
+      const ratePayload = {
+        organization_id: organizationId,
+        client_id: clientId,
+        equipment_type_id: equipmentTypeId,
+        monthly_rate: monthlyRate,
+        fuel_surcharge_pct: chargeValue(extraction.pricing.fuelSurchargePercent, 0),
+        environmental_fee: chargeValue(extraction.pricing.environmentalFee, 0),
+        delivery_fee: chargeValue(extraction.pricing.oneBinService, 0),
+        pickup_fee: chargeValue(extraction.pricing.oneBinService, 0),
+        relocate_fee: chargeValue(extraction.pricing.relocate, 0),
+        active: true,
+      }
+      const { error: rateError } = await supabase
+        .from('billing_rates')
+        .upsert(ratePayload, { onConflict: 'organization_id,client_id,equipment_type_id' })
+      if (rateError) warnings.push(`Billing rate was not saved: ${rateError.message}`)
+    } else {
+      warnings.push('No equipment type was selected, so monthly billing_rates were not created automatically.')
     }
 
     let billingRunId: string | null = null

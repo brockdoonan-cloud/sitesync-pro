@@ -13,6 +13,7 @@ export default async function DashboardPage() {
   if (portalPreference === 'customer') redirect('/dashboard/customer')
 
   if (org?.isSuperAdmin) redirect('/dashboard/admin')
+  if (org?.isDriver) redirect('/dashboard/driver')
   if (org?.isOperator) redirect('/dashboard/operator')
   if (org?.isClient) redirect('/dashboard/customer')
 
